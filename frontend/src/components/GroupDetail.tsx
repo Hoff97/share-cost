@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
   Group as MGroup, SegmentedControl, Checkbox, Badge, Card, Pill,
-  Divider, ActionIcon, CopyButton, Tooltip,
+  Divider, CopyButton, Tooltip, Collapse, Tabs,
 } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import * as api from '../api';
 import type { Group, Expense, Balance } from '../api';
 import { getStoredGroup, setSelectedMember, updateCachedBalance } from '../storage';
@@ -115,6 +116,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
   const memberOptions = group.members.map((m) => ({ value: m.id, label: m.name }));
 
+  const [addEntryOpened, { toggle: toggleAddEntry, close: closeAddEntry }] = useDisclosure(false);
+
   return (
     <Stack gap="lg">
       {/* Header */}
@@ -163,189 +166,213 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
         </MGroup>
       </MGroup>
 
-      {/* Add Entry */}
-      <Paper shadow="xs" p="md" radius="md" withBorder>
-        <Title order={4} mb="sm">Add Entry</Title>
-        <form onSubmit={handleAddExpense}>
-          <Stack gap="sm">
-            <SegmentedControl
-              fullWidth
-              value={expenseType}
-              onChange={(val) => {
-                setExpenseType(val);
-                if (val === 'transfer') setSplitBetween([]);
-                else setTransferTo(null);
-              }}
-              data={[
-                { label: '💳 Expense', value: 'expense' },
-                { label: '💸 Transfer', value: 'transfer' },
-                { label: '💰 Income', value: 'income' },
-              ]}
-            />
-            <TextInput
-              placeholder="Description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <NumberInput
-              placeholder="Amount"
-              min={0}
-              step={0.01}
-              decimalScale={2}
-              value={amount}
-              onChange={setAmount}
-              leftSection="$"
-            />
-            <Select
-              placeholder={expenseType === 'transfer' ? 'From who?' : expenseType === 'income' ? 'Received by?' : 'Who paid?'}
-              data={memberOptions}
-              value={paidBy}
-              onChange={setPaidBy}
-              clearable
-            />
-            {expenseType === 'transfer' ? (
-              <Select
-                placeholder="To who?"
-                data={memberOptions.filter(m => m.value !== paidBy)}
-                value={transferTo}
-                onChange={setTransferTo}
-                clearable
-              />
-            ) : (
-              <div>
-                <Text size="sm" fw={500} mb={4}>Split between:</Text>
-                <Stack gap={4}>
-                  {group.members.map((member) => (
-                    <Checkbox
-                      key={member.id}
-                      label={member.name}
-                      checked={splitBetween.includes(member.id)}
-                      onChange={() => toggleSplitMember(member.id)}
-                    />
-                  ))}
-                </Stack>
-              </div>
-            )}
-            <Button type="submit" fullWidth>
-              {expenseType === 'transfer' ? 'Add Transfer' : expenseType === 'income' ? 'Add Income' : 'Add Expense'}
-            </Button>
-          </Stack>
-        </form>
-      </Paper>
+      {/* Tabs: Expenses / Balances / Members */}
+      <Tabs defaultValue="expenses" variant="outline">
+        <Tabs.List grow>
+          <Tabs.Tab value="expenses">
+            Expenses{expenses.length > 0 && ` (${expenses.length})`}
+          </Tabs.Tab>
+          <Tabs.Tab value="balances">
+            Balances
+          </Tabs.Tab>
+          <Tabs.Tab value="members">
+            Members ({group.members.length})
+          </Tabs.Tab>
+        </Tabs.List>
 
-      {/* Expenses */}
-      <div>
-        <Title order={4} mb="sm">Expenses</Title>
-        <Stack gap="xs">
-          {expenses.length === 0 ? (
-            <Text c="dimmed" ta="center" py="lg">No expenses yet. Add one above!</Text>
-          ) : (
-            expenses.map((expense) => (
+        {/* Expenses Tab */}
+        <Tabs.Panel value="expenses" pt="md">
+          {/* Collapsible Add Entry */}
+          <Paper shadow="xs" p="md" radius="md" withBorder mb="md">
+            <MGroup
+              justify="space-between"
+              align="center"
+              onClick={toggleAddEntry}
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+            >
+              <Title order={4}>Add Entry</Title>
+              <Text size="xl" c="dimmed" style={{ transition: 'transform 200ms', transform: addEntryOpened ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                ▾
+              </Text>
+            </MGroup>
+            <Collapse in={addEntryOpened}>
+              <Divider my="sm" />
+              <form onSubmit={(e) => { handleAddExpense(e); closeAddEntry(); }}>
+                <Stack gap="sm">
+                  <SegmentedControl
+                    fullWidth
+                    value={expenseType}
+                    onChange={(val) => {
+                      setExpenseType(val);
+                      if (val === 'transfer') setSplitBetween([]);
+                      else setTransferTo(null);
+                    }}
+                    data={[
+                      { label: '💳 Expense', value: 'expense' },
+                      { label: '💸 Transfer', value: 'transfer' },
+                      { label: '💰 Income', value: 'income' },
+                    ]}
+                  />
+                  <TextInput
+                    placeholder="Description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                  <NumberInput
+                    placeholder="Amount"
+                    min={0}
+                    step={0.01}
+                    decimalScale={2}
+                    value={amount}
+                    onChange={setAmount}
+                    leftSection="$"
+                  />
+                  <Select
+                    placeholder={expenseType === 'transfer' ? 'From who?' : expenseType === 'income' ? 'Received by?' : 'Who paid?'}
+                    data={memberOptions}
+                    value={paidBy}
+                    onChange={setPaidBy}
+                    clearable
+                  />
+                  {expenseType === 'transfer' ? (
+                    <Select
+                      placeholder="To who?"
+                      data={memberOptions.filter(m => m.value !== paidBy)}
+                      value={transferTo}
+                      onChange={setTransferTo}
+                      clearable
+                    />
+                  ) : (
+                    <div>
+                      <Text size="sm" fw={500} mb={4}>Split between:</Text>
+                      <Stack gap={4}>
+                        {group.members.map((member) => (
+                          <Checkbox
+                            key={member.id}
+                            label={member.name}
+                            checked={splitBetween.includes(member.id)}
+                            onChange={() => toggleSplitMember(member.id)}
+                          />
+                        ))}
+                      </Stack>
+                    </div>
+                  )}
+                  <Button type="submit" fullWidth>
+                    {expenseType === 'transfer' ? 'Add Transfer' : expenseType === 'income' ? 'Add Income' : 'Add Expense'}
+                  </Button>
+                </Stack>
+              </form>
+            </Collapse>
+          </Paper>
+
+          <Stack gap="xs">
+            {expenses.length === 0 ? (
+              <Text c="dimmed" ta="center" py="lg">No expenses yet. Add one above!</Text>
+            ) : (
+              expenses.map((expense) => (
+                <Card
+                  key={expense.id}
+                  padding="sm"
+                  radius="md"
+                  withBorder
+                  style={{
+                    borderLeftWidth: 4,
+                    borderLeftColor: expense.expense_type === 'transfer'
+                      ? 'var(--mantine-color-green-5)'
+                      : expense.expense_type === 'income'
+                      ? 'var(--mantine-color-yellow-5)'
+                      : 'var(--mantine-color-blue-5)',
+                  }}
+                >
+                  <MGroup justify="space-between" align="center" mb={4}>
+                    <MGroup gap="xs">
+                      {expense.expense_type === 'transfer' && (
+                        <Badge size="sm" color="green" variant="light">💸 Transfer</Badge>
+                      )}
+                      {expense.expense_type === 'income' && (
+                        <Badge size="sm" color="yellow" variant="light">💰 Income</Badge>
+                      )}
+                      <Text fw={600}>{expense.description}</Text>
+                    </MGroup>
+                    <Text fw={700} c="blue" size="lg">${expense.amount.toFixed(2)}</Text>
+                  </MGroup>
+                  <Text size="sm" c="dimmed">
+                    {expense.expense_type === 'transfer' ? (
+                      <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</>
+                    ) : (
+                      <>
+                        {expense.expense_type === 'income' ? 'Received by' : 'Paid by'}: {getMemberName(expense.paid_by)}
+                        {' · '}
+                        Split: {expense.split_between.map(getMemberName).join(', ')}
+                      </>
+                    )}
+                  </Text>
+                </Card>
+              ))
+            )}
+          </Stack>
+        </Tabs.Panel>
+
+        {/* Balances Tab */}
+        <Tabs.Panel value="balances" pt="md">
+          <Stack gap="xs">
+            {balances.map((balance) => (
               <Card
-                key={expense.id}
+                key={balance.user_id}
                 padding="sm"
                 radius="md"
                 withBorder
-                style={{
-                  borderLeftWidth: 4,
-                  borderLeftColor: expense.expense_type === 'transfer'
-                    ? 'var(--mantine-color-green-5)'
-                    : expense.expense_type === 'income'
-                    ? 'var(--mantine-color-yellow-5)'
-                    : 'var(--mantine-color-blue-5)',
-                }}
+                style={balance.user_id === selectedMemberId ? {
+                  borderColor: 'var(--mantine-color-blue-5)',
+                  borderWidth: 2,
+                  background: 'var(--mantine-color-blue-0)',
+                } : undefined}
               >
-                <MGroup justify="space-between" align="center" mb={4}>
-                  <MGroup gap="xs">
-                    {expense.expense_type === 'transfer' && (
-                      <Badge size="sm" color="green" variant="light">💸 Transfer</Badge>
+                <MGroup justify="space-between">
+                  <Text fw={600}>
+                    {balance.user_name}
+                    {balance.user_id === selectedMemberId && (
+                      <Text component="span" c="blue" fw={500}> (you)</Text>
                     )}
-                    {expense.expense_type === 'income' && (
-                      <Badge size="sm" color="yellow" variant="light">💰 Income</Badge>
-                    )}
-                    <Text fw={600}>{expense.description}</Text>
-                  </MGroup>
-                  <Text fw={700} c="blue" size="lg">${expense.amount.toFixed(2)}</Text>
+                  </Text>
+                  <Text fw={700} size="lg" c={balance.balance >= 0 ? 'green' : 'red'}>
+                    {balance.balance >= 0 ? '+' : ''}${balance.balance.toFixed(2)}
+                  </Text>
                 </MGroup>
-                <Text size="sm" c="dimmed">
-                  {expense.expense_type === 'transfer' ? (
-                    <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</>
-                  ) : (
-                    <>
-                      {expense.expense_type === 'income' ? 'Received by' : 'Paid by'}: {getMemberName(expense.paid_by)}
-                      {' · '}
-                      Split: {expense.split_between.map(getMemberName).join(', ')}
-                    </>
-                  )}
-                </Text>
               </Card>
-            ))
-          )}
-        </Stack>
-      </div>
+            ))}
+          </Stack>
+        </Tabs.Panel>
 
-      {/* Balances */}
-      <div>
-        <Title order={4} mb="sm">Balances</Title>
-        <Stack gap="xs">
-          {balances.map((balance) => (
-            <Card
-              key={balance.user_id}
-              padding="sm"
-              radius="md"
-              withBorder
-              style={balance.user_id === selectedMemberId ? {
-                borderColor: 'var(--mantine-color-blue-5)',
-                borderWidth: 2,
-                background: 'var(--mantine-color-blue-0)',
-              } : undefined}
-            >
-              <MGroup justify="space-between">
-                <Text fw={600}>
-                  {balance.user_name}
-                  {balance.user_id === selectedMemberId && (
-                    <Text component="span" c="blue" fw={500}> (you)</Text>
-                  )}
-                </Text>
-                <Text fw={700} size="lg" c={balance.balance >= 0 ? 'green' : 'red'}>
-                  {balance.balance >= 0 ? '+' : ''}${balance.balance.toFixed(2)}
-                </Text>
-              </MGroup>
-            </Card>
-          ))}
-        </Stack>
-      </div>
-
-      {/* Members */}
-      <Divider />
-      <div>
-        <Title order={4} mb="sm">Members ({group.members.length})</Title>
-        <MGroup gap="xs" mb="sm">
-          {group.members.map((member) => (
-            <Pill
-              key={member.id}
-              size="md"
-              style={member.id === selectedMemberId ? {
-                background: 'var(--mantine-color-blue-5)',
-                color: 'white',
-              } : undefined}
-            >
-              {member.name}
-            </Pill>
-          ))}
-        </MGroup>
-        <form onSubmit={handleAddMember}>
-          <MGroup gap="xs">
-            <TextInput
-              placeholder="Add new member..."
-              value={newMemberName}
-              onChange={(e) => setNewMemberName(e.target.value)}
-              style={{ flex: 1 }}
-            />
-            <Button type="submit" variant="light">Add</Button>
+        {/* Members Tab */}
+        <Tabs.Panel value="members" pt="md">
+          <MGroup gap="xs" mb="sm">
+            {group.members.map((member) => (
+              <Pill
+                key={member.id}
+                size="md"
+                style={member.id === selectedMemberId ? {
+                  background: 'var(--mantine-color-blue-5)',
+                  color: 'white',
+                } : undefined}
+              >
+                {member.name}
+              </Pill>
+            ))}
           </MGroup>
-        </form>
-      </div>
+          <form onSubmit={handleAddMember}>
+            <MGroup gap="xs">
+              <TextInput
+                placeholder="Add new member..."
+                value={newMemberName}
+                onChange={(e) => setNewMemberName(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <Button type="submit" variant="light">Add</Button>
+            </MGroup>
+          </form>
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 }
