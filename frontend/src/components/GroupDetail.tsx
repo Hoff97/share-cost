@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as api from '../api';
 import type { Group, Expense, Balance } from '../api';
+import { getStoredGroup, setSelectedMember, updateCachedBalance } from '../storage';
 
 interface GroupDetailProps {
   group: Group;
@@ -17,6 +18,10 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [newMemberName, setNewMemberName] = useState('');
   const [showShareLink, setShowShareLink] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | undefined>(() => {
+    const stored = getStoredGroup(group.id);
+    return stored?.selectedMemberId;
+  });
 
   const loadData = useCallback(async () => {
     const [expensesData, balancesData] = await Promise.all([
@@ -25,7 +30,15 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     ]);
     setExpenses(expensesData);
     setBalances(balancesData);
-  }, [token]);
+    
+    // Update cached balance for selected member
+    if (selectedMemberId) {
+      const myBalance = balancesData.find(b => b.user_id === selectedMemberId);
+      if (myBalance) {
+        updateCachedBalance(group.id, myBalance.balance);
+      }
+    }
+  }, [token, selectedMemberId, group.id]);
 
   useEffect(() => {
     loadData();
@@ -79,6 +92,23 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setTimeout(() => setShowShareLink(false), 2000);
   };
 
+  const handleSelectMember = (memberId: string) => {
+    const member = group.members.find(m => m.id === memberId);
+    if (member) {
+      setSelectedMemberId(memberId);
+      setSelectedMember(group.id, memberId, member.name);
+      // Update cached balance
+      const myBalance = balances.find(b => b.user_id === memberId);
+      if (myBalance) {
+        updateCachedBalance(group.id, myBalance.balance);
+      }
+    }
+  };
+
+  const myBalance = selectedMemberId 
+    ? balances.find(b => b.user_id === selectedMemberId)
+    : null;
+
   return (
     <div className="group-detail">
       <div className="group-header">
@@ -87,6 +117,28 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
           {showShareLink ? '✓ Copied!' : '🔗 Share Link'}
         </button>
       </div>
+
+      <section className="identity-section">
+        <h3>Who are you?</h3>
+        <div className="identity-select">
+          <select 
+            value={selectedMemberId || ''} 
+            onChange={(e) => handleSelectMember(e.target.value)}
+          >
+            <option value="">Select yourself...</option>
+            {group.members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+          {myBalance && (
+            <div className={`my-balance ${myBalance.balance >= 0 ? 'positive' : 'negative'}`}>
+              Your balance: {myBalance.balance >= 0 ? '+' : ''}${myBalance.balance.toFixed(2)}
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="members-section">
         <h3>Members ({group.members.length})</h3>

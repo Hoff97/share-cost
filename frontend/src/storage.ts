@@ -7,6 +7,9 @@ export interface StoredGroup {
   name: string;
   token: string;
   lastAccessed: string;
+  selectedMemberId?: string;
+  selectedMemberName?: string;
+  cachedBalance?: number;
 }
 
 export const getStoredGroups = (): StoredGroup[] => {
@@ -23,17 +26,18 @@ export const saveGroup = (id: string, name: string, token: string): void => {
   const groups = getStoredGroups();
   const existingIndex = groups.findIndex(g => g.id === id);
   
-  const storedGroup: StoredGroup = {
-    id,
-    name,
-    token,
-    lastAccessed: new Date().toISOString(),
-  };
-
   if (existingIndex >= 0) {
-    groups[existingIndex] = storedGroup;
+    // Preserve existing member selection and balance
+    groups[existingIndex].name = name;
+    groups[existingIndex].token = token;
+    groups[existingIndex].lastAccessed = new Date().toISOString();
   } else {
-    groups.push(storedGroup);
+    groups.push({
+      id,
+      name,
+      token,
+      lastAccessed: new Date().toISOString(),
+    });
   }
 
   // Sort by last accessed (most recent first)
@@ -54,4 +58,27 @@ export const updateGroupName = (id: string, name: string): void => {
     group.name = name;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
   }
+};
+
+export const setSelectedMember = (groupId: string, memberId: string, memberName: string): void => {
+  const groups = getStoredGroups();
+  const group = groups.find(g => g.id === groupId);
+  if (group) {
+    group.selectedMemberId = memberId;
+    group.selectedMemberName = memberName;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+  }
+};
+
+export const updateCachedBalance = (groupId: string, balance: number): void => {
+  const groups = getStoredGroups();
+  const group = groups.find(g => g.id === groupId);
+  if (group) {
+    group.cachedBalance = balance;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+  }
+};
+
+export const getStoredGroup = (groupId: string): StoredGroup | undefined => {
+  return getStoredGroups().find(g => g.id === groupId);
 };

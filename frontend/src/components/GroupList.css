@@ -9,6 +9,31 @@
   font-size: 1.1rem;
 }
 
+.total-balance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.total-balance.positive {
+  background: #d4edda;
+  color: #155724;
+}
+
+.total-balance.negative {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.total-amount {
+  font-size: 1.2rem;
+}
+
 .group-list ul {
   list-style: none;
   padding: 0;
@@ -25,6 +50,7 @@
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.2s, transform 0.1s;
+  gap: 1rem;
 }
 
 .group-list li:hover {
@@ -36,6 +62,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  flex: 1;
 }
 
 .group-name {
@@ -46,6 +73,20 @@
 .group-accessed {
   font-size: 0.8rem;
   color: #666;
+}
+
+.group-balance {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.group-balance.positive {
+  color: #28a745;
+}
+
+.group-balance.negative {
+  color: #dc3545;
 }
 
 .remove-btn {

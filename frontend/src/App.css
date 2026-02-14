@@ -413,6 +413,57 @@ button:disabled {
   background: #219a52;
 }
 
+.identity-section {
+  margin-bottom: 30px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.identity-section h3 {
+  margin-bottom: 15px;
+  color: #2c3e50;
+}
+
+.identity-select {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.identity-select select {
+  padding: 10px 15px;
+  border: 2px solid #3498db;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: white;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.identity-select select:focus {
+  outline: none;
+  border-color: #2980b9;
+}
+
+.my-balance {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.my-balance.positive {
+  background: #d4edda;
+  color: #155724;
+}
+
+.my-balance.negative {
+  background: #f8d7da;
+  color: #721c24;
+}
+
 .members-section {
   margin-bottom: 30px;
 }
