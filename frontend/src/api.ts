@@ -10,6 +10,7 @@ export interface Member {
 export interface Group {
   id: string;
   name: string;
+  currency: string;
   members: Member[];
   created_at: string;
 }
@@ -28,6 +29,8 @@ export interface Expense {
   split_between: string[];
   expense_type: string;
   transfer_to: string | null;
+  currency: string;
+  exchange_rate: number;
   expense_date: string;
   created_at: string;
 }
@@ -53,11 +56,11 @@ export const getGroup = async (token: string): Promise<Group | null> => {
   return res.json();
 };
 
-export const createGroup = async (name: string, memberNames: string[]): Promise<GroupCreatedResponse> => {
+export const createGroup = async (name: string, memberNames: string[], currency?: string): Promise<GroupCreatedResponse> => {
   const res = await fetch(`${API_BASE}/groups`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, member_names: memberNames }),
+    body: JSON.stringify({ name, member_names: memberNames, currency: currency || null }),
   });
   return res.json();
 };
@@ -87,7 +90,9 @@ export const createExpense = async (
   splitBetween: string[],
   expenseType: string = 'expense',
   transferTo?: string,
-  expenseDate?: string
+  expenseDate?: string,
+  currency?: string,
+  exchangeRate?: number
 ): Promise<Expense> => {
   const res = await fetch(`${API_BASE}/groups/current/expenses`, {
     method: 'POST',
@@ -100,6 +105,8 @@ export const createExpense = async (
       expense_type: expenseType,
       transfer_to: transferTo || null,
       expense_date: expenseDate || null,
+      currency: currency || null,
+      exchange_rate: exchangeRate ?? null,
     }),
   });
   return res.json();
@@ -138,7 +145,9 @@ export const updateExpense = async (
   splitBetween: string[],
   expenseType: string = 'expense',
   transferTo?: string,
-  expenseDate?: string
+  expenseDate?: string,
+  currency?: string,
+  exchangeRate?: number
 ): Promise<Expense> => {
   const res = await fetch(`${API_BASE}/groups/current/expenses/${expenseId}`, {
     method: 'PUT',
@@ -151,6 +160,8 @@ export const updateExpense = async (
       expense_type: expenseType,
       transfer_to: transferTo || null,
       expense_date: expenseDate || null,
+      currency: currency || null,
+      exchange_rate: exchangeRate ?? null,
     }),
   });
   return res.json();

@@ -9,6 +9,7 @@ use uuid::Uuid;
 pub struct GroupRow {
     pub id: Uuid,
     pub name: String,
+    pub currency: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -31,6 +32,8 @@ pub struct ExpenseRow {
     pub paid_by: Uuid,
     pub expense_type: String,
     pub transfer_to: Option<Uuid>,
+    pub currency: String,
+    pub exchange_rate: BigDecimal,
     pub expense_date: NaiveDate,
     pub created_at: DateTime<Utc>,
 }
@@ -60,6 +63,7 @@ pub struct Member {
 pub struct Group {
     pub id: Uuid,
     pub name: String,
+    pub currency: String,
     pub members: Vec<Member>,
     pub created_at: DateTime<Utc>,
 }
@@ -74,6 +78,8 @@ pub struct Expense {
     pub split_between: Vec<Uuid>,
     pub expense_type: String,
     pub transfer_to: Option<Uuid>,
+    pub currency: String,
+    pub exchange_rate: f64,
     pub expense_date: NaiveDate,
     pub created_at: DateTime<Utc>,
 }
@@ -90,6 +96,7 @@ pub struct Balance {
 pub struct CreateGroupRequest {
     pub name: String,
     pub member_names: Vec<String>,
+    pub currency: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,6 +123,8 @@ pub struct CreateExpenseRequest {
     #[serde(default = "default_expense_type")]
     pub expense_type: String,
     pub transfer_to: Option<Uuid>,
+    pub currency: Option<String>,
+    pub exchange_rate: Option<f64>,
     pub expense_date: Option<NaiveDate>,
 }
 
@@ -128,6 +137,8 @@ pub struct UpdateExpenseRequest {
     #[serde(default = "default_expense_type")]
     pub expense_type: String,
     pub transfer_to: Option<Uuid>,
+    pub currency: Option<String>,
+    pub exchange_rate: Option<f64>,
     pub expense_date: Option<NaiveDate>,
 }
 

@@ -25,13 +25,15 @@ async fn create_group(
     let pool = db::get_pool();
     let group_id = Uuid::new_v4();
     let created_at = Utc::now();
+    let currency = request.currency.as_deref().unwrap_or("EUR");
 
     // Insert group
     sqlx::query(
-        "INSERT INTO groups (id, name, created_at) VALUES ($1, $2, $3)"
+        "INSERT INTO groups (id, name, currency, created_at) VALUES ($1, $2, $3, $4)"
     )
     .bind(group_id)
     .bind(&request.name)
+    .bind(currency)
     .bind(created_at)
     .execute(pool)
     .await
@@ -69,6 +71,7 @@ async fn create_group(
     let group = Group {
         id: group_id,
         name: request.name.clone(),
+        currency: currency.to_string(),
         members,
         created_at,
     };
@@ -89,7 +92,7 @@ async fn get_current_group(
     
     // Get group
     let group_row: GroupRow = sqlx::query_as(
-        "SELECT id, name, created_at FROM groups WHERE id = $1"
+        "SELECT id, name, currency, created_at FROM groups WHERE id = $1"
     )
     .bind(auth.group_id)
     .fetch_optional(pool)
@@ -115,6 +118,7 @@ async fn get_current_group(
     let group = Group {
         id: group_row.id,
         name: group_row.name,
+        currency: group_row.currency.clone(),
         members: member_rows.into_iter().map(|r| Member {
             id: r.id,
             name: r.name,
@@ -137,7 +141,7 @@ async fn add_member(
     
     // Check group exists
     let group_row: GroupRow = sqlx::query_as(
-        "SELECT id, name, created_at FROM groups WHERE id = $1"
+        "SELECT id, name, currency, created_at FROM groups WHERE id = $1"
     )
     .bind(auth.group_id)
     .fetch_optional(pool)
@@ -179,6 +183,7 @@ async fn add_member(
     let group = Group {
         id: group_row.id,
         name: group_row.name,
+        currency: group_row.currency.clone(),
         members: member_rows.into_iter().map(|r| Member {
             id: r.id,
             name: r.name,
@@ -246,7 +251,7 @@ async fn get_expenses(
     
     // Get all expenses for this group
     let expense_rows: Vec<ExpenseRow> = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at 
          FROM expenses WHERE group_id = $1 ORDER BY expense_date DESC, created_at DESC"
     )
     .bind(auth.group_id)
@@ -280,6 +285,8 @@ async fn get_expenses(
             split_between: splits.into_iter().map(|s| s.member_id).collect(),
             expense_type: row.expense_type,
             transfer_to: row.transfer_to,
+            currency: row.currency,
+            exchange_rate: row.exchange_rate.to_f64().unwrap_or(1.0),
             expense_date: row.expense_date,
             created_at: row.created_at,
         });
@@ -299,13 +306,27 @@ async fn create_expense(
     let created_at = Utc::now();
     let expense_date = request.expense_date.unwrap_or_else(|| Utc::now().date_naive());
 
+    // Get group for default currency
+    let group_row: GroupRow = sqlx::query_as(
+        "SELECT id, name, currency, created_at FROM groups WHERE id = $1"
+    )
+    .bind(auth.group_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Failed to fetch group: {}", e);
+        Status::InternalServerError
+    })?;
+    let currency = request.currency.clone().unwrap_or(group_row.currency);
+    let exchange_rate_val = BigDecimal::try_from(request.exchange_rate.unwrap_or(1.0)).map_err(|_| Status::BadRequest)?;
+
     // Convert f64 to BigDecimal
     let amount = BigDecimal::try_from(request.amount).map_err(|_| Status::BadRequest)?;
 
     // Insert expense
     sqlx::query(
-        "INSERT INTO expenses (id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        "INSERT INTO expenses (id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
     )
     .bind(expense_id)
     .bind(auth.group_id)
@@ -314,6 +335,8 @@ async fn create_expense(
     .bind(request.paid_by)
     .bind(&request.expense_type)
     .bind(request.transfer_to)
+    .bind(&currency)
+    .bind(&exchange_rate_val)
     .bind(expense_date)
     .bind(created_at)
     .execute(pool)
@@ -349,6 +372,8 @@ async fn create_expense(
         split_between: request.split_between.clone(),
         expense_type: request.expense_type.clone(),
         transfer_to: request.transfer_to,
+        currency,
+        exchange_rate: request.exchange_rate.unwrap_or(1.0),
         expense_date,
         created_at,
     };
@@ -368,7 +393,7 @@ async fn update_expense(
 
     // Verify expense belongs to this group
     let _existing: ExpenseRow = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at 
          FROM expenses WHERE id = $1 AND group_id = $2"
     )
     .bind(expense_uuid)
@@ -383,17 +408,21 @@ async fn update_expense(
 
     let amount = BigDecimal::try_from(request.amount).map_err(|_| Status::BadRequest)?;
     let expense_date = request.expense_date.unwrap_or(_existing.expense_date);
+    let currency = request.currency.clone().unwrap_or(_existing.currency);
+    let exchange_rate_val = BigDecimal::try_from(request.exchange_rate.unwrap_or(_existing.exchange_rate.to_f64().unwrap_or(1.0))).map_err(|_| Status::BadRequest)?;
 
     // Update expense
     sqlx::query(
-        "UPDATE expenses SET description = $1, amount = $2, paid_by = $3, expense_type = $4, transfer_to = $5, expense_date = $6
-         WHERE id = $7"
+        "UPDATE expenses SET description = $1, amount = $2, paid_by = $3, expense_type = $4, transfer_to = $5, currency = $6, exchange_rate = $7, expense_date = $8
+         WHERE id = $9"
     )
     .bind(&request.description)
     .bind(&amount)
     .bind(request.paid_by)
     .bind(&request.expense_type)
     .bind(request.transfer_to)
+    .bind(&currency)
+    .bind(&exchange_rate_val)
     .bind(expense_date)
     .bind(expense_uuid)
     .execute(pool)
@@ -438,6 +467,8 @@ async fn update_expense(
         split_between: request.split_between.clone(),
         expense_type: request.expense_type.clone(),
         transfer_to: request.transfer_to,
+        currency,
+        exchange_rate: request.exchange_rate.unwrap_or(1.0),
         expense_date,
         created_at: _existing.created_at,
     };
@@ -456,7 +487,7 @@ async fn delete_expense(
 
     // Verify expense belongs to this group
     let _existing: ExpenseRow = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at 
          FROM expenses WHERE id = $1 AND group_id = $2"
     )
     .bind(expense_uuid)
@@ -513,7 +544,7 @@ async fn get_balances(
 
     // Get all expenses with splits
     let expense_rows: Vec<ExpenseRow> = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at 
          FROM expenses WHERE group_id = $1"
     )
     .bind(auth.group_id)
@@ -536,7 +567,9 @@ async fn get_balances(
 
     // Calculate balances for each expense
     for expense_row in expense_rows {
-        let amount = expense_row.amount.to_f64().unwrap_or(0.0);
+        let raw_amount = expense_row.amount.to_f64().unwrap_or(0.0);
+        let exchange_rate = expense_row.exchange_rate.to_f64().unwrap_or(1.0);
+        let amount = raw_amount * exchange_rate; // Convert to group currency
         let paid_by = expense_row.paid_by;
 
         match expense_row.expense_type.as_str() {

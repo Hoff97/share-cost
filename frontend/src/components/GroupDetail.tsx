@@ -26,6 +26,34 @@ const toIsoDate = (display: string) => {
   return `${y}-${m}-${d}`;
 };
 
+// Currency helpers
+const CURRENCIES = [
+  'AUD', 'BGN', 'BRL', 'CAD', 'CHF', 'CNY', 'CZK', 'DKK',
+  'EUR', 'GBP', 'HKD', 'HUF', 'IDR', 'ILS', 'INR', 'ISK',
+  'JPY', 'KRW', 'MXN', 'MYR', 'NOK', 'NZD', 'PHP', 'PLN',
+  'RON', 'SEK', 'SGD', 'THB', 'TRY', 'USD', 'ZAR',
+];
+const currencyData = CURRENCIES.map(c => ({ value: c, label: c }));
+const SYM: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', JPY: '¥' };
+const cs = (c: string) => SYM[c] || c;
+const fmtAmt = (n: number, c: string) => {
+  const s = SYM[c];
+  const abs = Math.abs(n).toFixed(2);
+  const sign = n < 0 ? '-' : '';
+  return s ? `${sign}${s}${abs}` : `${sign}${abs} ${c}`;
+};
+const fetchRate = async (from: string, to: string, date: string): Promise<number | null> => {
+  if (from === to) return 1;
+  try {
+    const res = await fetch(`https://api.frankfurter.app/${date}?from=${from}&to=${to}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.rates?.[to] ?? null;
+  } catch {
+    return null;
+  }
+};
+
 export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) {
   const todayStr = () => formatDate(new Date().toISOString().slice(0, 10));
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -49,6 +77,10 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [editExpenseType, setEditExpenseType] = useState('expense');
   const [editTransferTo, setEditTransferTo] = useState<string | null>(null);
   const [editExpenseDate, setEditExpenseDate] = useState('');
+  const [expenseCurrency, setExpenseCurrency] = useState(group.currency);
+  const [exchangeRate, setExchangeRate] = useState<number>(1);
+  const [editExpenseCurrency, setEditExpenseCurrency] = useState('');
+  const [editExchangeRate, setEditExchangeRate] = useState<number>(1);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(() => {
     const stored = getStoredGroup(group.id);
     return stored?.selectedMemberId ?? null;
@@ -74,6 +106,30 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     loadData();
   }, [loadData]);
 
+  // Auto-fetch exchange rate for add form
+  useEffect(() => {
+    if (expenseCurrency === group.currency) { setExchangeRate(1); return; }
+    const iso = toIsoDate(expenseDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    let cancelled = false;
+    fetchRate(expenseCurrency, group.currency, iso).then(rate => {
+      if (!cancelled && rate !== null) setExchangeRate(rate);
+    });
+    return () => { cancelled = true; };
+  }, [expenseCurrency, expenseDate, group.currency]);
+
+  // Auto-fetch exchange rate for edit form
+  useEffect(() => {
+    if (!editingExpenseId || editExpenseCurrency === group.currency) return;
+    const iso = toIsoDate(editExpenseDate);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    let cancelled = false;
+    fetchRate(editExpenseCurrency, group.currency, iso).then(rate => {
+      if (!cancelled && rate !== null) setEditExchangeRate(rate);
+    });
+    return () => { cancelled = true; };
+  }, [editExpenseCurrency, editExpenseDate, group.currency, editingExpenseId]);
+
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!description || !amount || !paidBy) return;
@@ -88,7 +144,9 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       splitBetween,
       expenseType,
       expenseType === 'transfer' ? (transferTo ?? undefined) : undefined,
-      toIsoDate(expenseDate)
+      toIsoDate(expenseDate),
+      expenseCurrency,
+      exchangeRate
     );
 
     setDescription('');
@@ -98,6 +156,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setExpenseType('expense');
     setTransferTo(null);
     setExpenseDate(todayStr());
+    setExpenseCurrency(group.currency);
+    setExchangeRate(1);
     loadData();
   };
 
@@ -186,6 +246,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setEditExpenseType(expense.expense_type);
     setEditTransferTo(expense.transfer_to);
     setEditExpenseDate(formatDate(expense.expense_date));
+    setEditExpenseCurrency(expense.currency);
+    setEditExchangeRate(expense.exchange_rate);
   };
 
   const handleCancelEditExpense = () => {
@@ -206,7 +268,9 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       editSplitBetween,
       editExpenseType,
       editExpenseType === 'transfer' ? (editTransferTo ?? undefined) : undefined,
-      toIsoDate(editExpenseDate)
+      toIsoDate(editExpenseDate),
+      editExpenseCurrency,
+      editExchangeRate
     );
     setEditingExpenseId(null);
     loadData();
@@ -435,7 +499,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                   color={myBalance.balance >= 0 ? 'green' : 'red'}
                   variant="light"
                 >
-                  {myBalance.balance >= 0 ? '+' : ''}${myBalance.balance.toFixed(2)}
+                  {myBalance.balance >= 0 ? '+' : ''}{fmtAmt(myBalance.balance, group.currency)}
                 </Badge>
               )}
             </MGroup>
@@ -513,15 +577,44 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
-                  <NumberInput
-                    placeholder="Amount"
-                    min={0}
-                    step={0.01}
-                    decimalScale={2}
-                    value={amount}
-                    onChange={setAmount}
-                    leftSection="$"
-                  />
+                  <MGroup gap="xs">
+                    <NumberInput
+                      placeholder="Amount"
+                      min={0}
+                      step={0.01}
+                      decimalScale={2}
+                      value={amount}
+                      onChange={setAmount}
+                      leftSection={cs(expenseCurrency)}
+                      style={{ flex: 1 }}
+                    />
+                    <Select
+                      data={currencyData}
+                      value={expenseCurrency}
+                      onChange={(val) => val && setExpenseCurrency(val)}
+                      w={90}
+                      searchable
+                    />
+                  </MGroup>
+                  {expenseCurrency !== group.currency && (
+                    <MGroup gap="xs" align="flex-end">
+                      <NumberInput
+                        label={`1 ${expenseCurrency} = ? ${group.currency}`}
+                        value={exchangeRate}
+                        onChange={(val) => setExchangeRate(typeof val === 'string' ? parseFloat(val) || 1 : val)}
+                        decimalScale={6}
+                        step={0.0001}
+                        min={0}
+                        size="xs"
+                        style={{ flex: 1 }}
+                      />
+                      {typeof amount === 'number' && amount > 0 && (
+                        <Text size="xs" c="dimmed" pb={2}>
+                          ≈ {fmtAmt(amount * exchangeRate, group.currency)}
+                        </Text>
+                      )}
+                    </MGroup>
+                  )}
                   <Select
                     placeholder={expenseType === 'transfer' ? 'From who?' : expenseType === 'income' ? 'Received by?' : 'Who paid?'}
                     data={memberOptions}
@@ -607,15 +700,44 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
                       />
-                      <NumberInput
-                        placeholder="Amount"
-                        min={0}
-                        step={0.01}
-                        decimalScale={2}
-                        value={editAmount}
-                        onChange={setEditAmount}
-                        leftSection="$"
-                      />
+                      <MGroup gap="xs">
+                        <NumberInput
+                          placeholder="Amount"
+                          min={0}
+                          step={0.01}
+                          decimalScale={2}
+                          value={editAmount}
+                          onChange={setEditAmount}
+                          leftSection={cs(editExpenseCurrency)}
+                          style={{ flex: 1 }}
+                        />
+                        <Select
+                          data={currencyData}
+                          value={editExpenseCurrency}
+                          onChange={(val) => val && setEditExpenseCurrency(val)}
+                          w={90}
+                          searchable
+                        />
+                      </MGroup>
+                      {editExpenseCurrency !== group.currency && (
+                        <MGroup gap="xs" align="flex-end">
+                          <NumberInput
+                            label={`1 ${editExpenseCurrency} = ? ${group.currency}`}
+                            value={editExchangeRate}
+                            onChange={(val) => setEditExchangeRate(typeof val === 'string' ? parseFloat(val) || 1 : val)}
+                            decimalScale={6}
+                            step={0.0001}
+                            min={0}
+                            size="xs"
+                            style={{ flex: 1 }}
+                          />
+                          {typeof editAmount === 'number' && editAmount > 0 && (
+                            <Text size="xs" c="dimmed" pb={2}>
+                              ≈ {fmtAmt(editAmount * editExchangeRate, group.currency)}
+                            </Text>
+                          )}
+                        </MGroup>
+                      )}
                       <Select
                         placeholder={editExpenseType === 'transfer' ? 'From who?' : editExpenseType === 'income' ? 'Received by?' : 'Who paid?'}
                         data={memberOptions}
@@ -671,8 +793,11 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                           )}
                           <Text fw={600}>{expense.description}</Text>
                         </MGroup>
-                        <MGroup gap={4}>
-                          <Text fw={700} c="blue" size="lg">${expense.amount.toFixed(2)}</Text>
+                        <MGroup gap={4} align="baseline">
+                          <Text fw={700} c="blue" size="lg">{fmtAmt(expense.amount, expense.currency)}</Text>
+                          {expense.currency !== group.currency && (
+                            <Text size="xs" c="dimmed">≈ {fmtAmt(expense.amount * expense.exchange_rate, group.currency)}</Text>
+                          )}
                           <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => handleStartEditExpense(expense)}>
                             <Text size="xs">✏️</Text>
                           </ActionIcon>
@@ -748,7 +873,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                       </Text>
                     </MGroup>
                     <Text fw={700} size="lg" c={balance.balance >= 0 ? 'green' : 'red'}>
-                      {balance.balance >= 0 ? '+' : ''}${balance.balance.toFixed(2)}
+                      {balance.balance >= 0 ? '+' : ''}{fmtAmt(balance.balance, group.currency)}
                     </Text>
                   </MGroup>
                   <Collapse in={isExpanded}>
@@ -761,7 +886,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                             <MGroup gap="xs">
                               <Text size="sm" c="red">→ Pay</Text>
                               <Text size="sm" fw={500}>{o.name}</Text>
-                              <Text size="sm" fw={600} c="red">${o.amount.toFixed(2)}</Text>
+                              <Text size="sm" fw={600} c="red">{fmtAmt(o.amount, group.currency)}</Text>
                             </MGroup>
                             {recipient?.paypal_email && (
                               <MGroup gap="xs" ml="md" mt={2}>
@@ -828,7 +953,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                                             disabled={!crossGroupTransfer.creditorInTargetId || !crossGroupTransfer.myIdInTarget}
                                             onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleConfirmCrossGroupTransfer(); }}
                                           >
-                                            Transfer ${o.amount.toFixed(2)}
+                                            Transfer {fmtAmt(o.amount, group.currency)}
                                           </Button>
                                           <Button
                                             size="compact-xs"
@@ -868,7 +993,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                           <MGroup gap="xs">
                             <Text size="sm" c="green">← Receive from</Text>
                             <Text size="sm" fw={500}>{o.name}</Text>
-                            <Text size="sm" fw={600} c="green">${o.amount.toFixed(2)}</Text>
+                            <Text size="sm" fw={600} c="green">{fmtAmt(o.amount, group.currency)}</Text>
                           </MGroup>
                           <Tooltip label={`Record that ${o.name} paid ${balance.user_name}`}>
                             <Button
