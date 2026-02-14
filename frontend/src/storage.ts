@@ -82,3 +82,25 @@ export const updateCachedBalance = (groupId: string, balance: number): void => {
 export const getStoredGroup = (groupId: string): StoredGroup | undefined => {
   return getStoredGroups().find(g => g.id === groupId);
 };
+
+// Personal payment info stored in browser
+const PAYMENT_INFO_KEY = 'share-cost-payment-info';
+
+export interface StoredPaymentInfo {
+  paypal_email: string | null;
+  iban: string | null;
+}
+
+export const getStoredPaymentInfo = (): StoredPaymentInfo | null => {
+  try {
+    const data = localStorage.getItem(PAYMENT_INFO_KEY);
+    if (!data) return null;
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+};
+
+export const savePaymentInfo = (paypalEmail: string | null, iban: string | null): void => {
+  localStorage.setItem(PAYMENT_INFO_KEY, JSON.stringify({ paypal_email: paypalEmail, iban: iban }));
+};

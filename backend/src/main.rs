@@ -18,13 +18,12 @@ fn rocket() -> _ {
     let cors = CorsOptions::default()
         .allowed_origins(AllowedOrigins::all())
         .allowed_methods(
-            vec![Method::Get, Method::Post, Method::Put, Method::Delete]
+            vec![Method::Get, Method::Post, Method::Put, Method::Delete, Method::Options]
                 .into_iter()
                 .map(From::from)
                 .collect(),
         )
         .allowed_headers(AllowedHeaders::all())
-        .allow_credentials(true)
         .to_cors()
         .expect("CORS configuration failed");
 

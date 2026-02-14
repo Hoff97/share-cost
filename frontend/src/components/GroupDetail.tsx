@@ -7,7 +7,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import * as api from '../api';
 import type { Group, Expense, Balance } from '../api';
-import { getStoredGroup, setSelectedMember, updateCachedBalance } from '../storage';
+import { getStoredGroup, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
 
 interface GroupDetailProps {
   group: Group;
@@ -118,13 +118,17 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
   const handleSavePayment = async (memberId: string) => {
     await api.updateMemberPayment(token, memberId, editPaypal || null, editIban || null);
+    // If editing own payment info, also save to browser for reuse in other groups
+    if (memberId === selectedMemberId) {
+      savePaymentInfo(editPaypal || null, editIban || null);
+    }
     setEditingPayment(null);
     onGroupUpdated();
   };
 
   const shareUrl = `${window.location.origin}/#token=${token}`;
 
-  const handleSelectMember = (memberId: string) => {
+  const handleSelectMember = async (memberId: string) => {
     const member = group.members.find(m => m.id === memberId);
     if (member) {
       setSelectedMemberId(memberId);
@@ -132,6 +136,14 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       const myBalance = balances.find(b => b.user_id === memberId);
       if (myBalance) {
         updateCachedBalance(group.id, myBalance.balance);
+      }
+      // Auto-apply stored payment info if member has none set
+      if (!member.paypal_email && !member.iban) {
+        const stored = getStoredPaymentInfo();
+        if (stored && (stored.paypal_email || stored.iban)) {
+          await api.updateMemberPayment(token, memberId, stored.paypal_email, stored.iban);
+          onGroupUpdated();
+        }
       }
     }
   };
