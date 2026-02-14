@@ -15,7 +15,19 @@ interface GroupDetailProps {
   onGroupUpdated: () => void;
 }
 
+// Convert YYYY-MM-DD → MM.DD.YYYY
+const formatDate = (iso: string) => {
+  const [y, m, d] = iso.split('-');
+  return `${m}.${d}.${y}`;
+};
+// Convert MM.DD.YYYY → YYYY-MM-DD
+const toIsoDate = (display: string) => {
+  const [m, d, y] = display.split('.');
+  return `${y}-${m}-${d}`;
+};
+
 export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) {
+  const todayStr = () => formatDate(new Date().toISOString().slice(0, 10));
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [description, setDescription] = useState('');
@@ -24,6 +36,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
   const [expenseType, setExpenseType] = useState('expense');
   const [transferTo, setTransferTo] = useState<string | null>(null);
+  const [expenseDate, setExpenseDate] = useState(todayStr);
   const [newMemberName, setNewMemberName] = useState('');
   const [editingPayment, setEditingPayment] = useState<string | null>(null);
   const [editPaypal, setEditPaypal] = useState('');
@@ -35,6 +48,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [editSplitBetween, setEditSplitBetween] = useState<string[]>([]);
   const [editExpenseType, setEditExpenseType] = useState('expense');
   const [editTransferTo, setEditTransferTo] = useState<string | null>(null);
+  const [editExpenseDate, setEditExpenseDate] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(() => {
     const stored = getStoredGroup(group.id);
     return stored?.selectedMemberId ?? null;
@@ -73,7 +87,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       paidBy,
       splitBetween,
       expenseType,
-      expenseType === 'transfer' ? (transferTo ?? undefined) : undefined
+      expenseType === 'transfer' ? (transferTo ?? undefined) : undefined,
+      toIsoDate(expenseDate)
     );
 
     setDescription('');
@@ -82,6 +97,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setSplitBetween([]);
     setExpenseType('expense');
     setTransferTo(null);
+    setExpenseDate(todayStr());
     loadData();
   };
 
@@ -169,6 +185,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setEditSplitBetween(expense.split_between);
     setEditExpenseType(expense.expense_type);
     setEditTransferTo(expense.transfer_to);
+    setEditExpenseDate(formatDate(expense.expense_date));
   };
 
   const handleCancelEditExpense = () => {
@@ -188,7 +205,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       editPaidBy,
       editSplitBetween,
       editExpenseType,
-      editExpenseType === 'transfer' ? (editTransferTo ?? undefined) : undefined
+      editExpenseType === 'transfer' ? (editTransferTo ?? undefined) : undefined,
+      toIsoDate(editExpenseDate)
     );
     setEditingExpenseId(null);
     loadData();
@@ -534,6 +552,12 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                       </Stack>
                     </div>
                   )}
+                  <TextInput
+                    label="Date"
+                    placeholder="MM.DD.YYYY"
+                    value={expenseDate}
+                    onChange={(e) => setExpenseDate(e.target.value)}
+                  />
                   <Button type="submit" fullWidth>
                     {expenseType === 'transfer' ? 'Add Transfer' : expenseType === 'income' ? 'Add Income' : 'Add Expense'}
                   </Button>
@@ -622,6 +646,13 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                           </Stack>
                         </div>
                       )}
+                      <TextInput
+                        label="Date"
+                        placeholder="MM.DD.YYYY"
+                        size="xs"
+                        value={editExpenseDate}
+                        onChange={(e) => setEditExpenseDate(e.target.value)}
+                      />
                       <MGroup gap="xs">
                         <Button size="compact-sm" onClick={handleSaveExpense}>Save</Button>
                         <Button size="compact-sm" variant="subtle" color="gray" onClick={handleCancelEditExpense}>Cancel</Button>
@@ -660,6 +691,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                             Split: {expense.split_between.map(getMemberName).join(', ')}
                           </>
                         )}
+                        {' · '}
+                        <Text component="span" size="xs" c="dimmed">{formatDate(expense.expense_date)}</Text>
                       </Text>
                     </>
                   )}

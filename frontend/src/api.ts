@@ -28,6 +28,7 @@ export interface Expense {
   split_between: string[];
   expense_type: string;
   transfer_to: string | null;
+  expense_date: string;
   created_at: string;
 }
 
@@ -85,7 +86,8 @@ export const createExpense = async (
   paidBy: string,
   splitBetween: string[],
   expenseType: string = 'expense',
-  transferTo?: string
+  transferTo?: string,
+  expenseDate?: string
 ): Promise<Expense> => {
   const res = await fetch(`${API_BASE}/groups/current/expenses`, {
     method: 'POST',
@@ -97,6 +99,7 @@ export const createExpense = async (
       split_between: splitBetween,
       expense_type: expenseType,
       transfer_to: transferTo || null,
+      expense_date: expenseDate || null,
     }),
   });
   return res.json();
@@ -134,7 +137,8 @@ export const updateExpense = async (
   paidBy: string,
   splitBetween: string[],
   expenseType: string = 'expense',
-  transferTo?: string
+  transferTo?: string,
+  expenseDate?: string
 ): Promise<Expense> => {
   const res = await fetch(`${API_BASE}/groups/current/expenses/${expenseId}`, {
     method: 'PUT',
@@ -146,6 +150,7 @@ export const updateExpense = async (
       split_between: splitBetween,
       expense_type: expenseType,
       transfer_to: transferTo || null,
+      expense_date: expenseDate || null,
     }),
   });
   return res.json();

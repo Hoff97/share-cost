@@ -1,5 +1,5 @@
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -31,6 +31,7 @@ pub struct ExpenseRow {
     pub paid_by: Uuid,
     pub expense_type: String,
     pub transfer_to: Option<Uuid>,
+    pub expense_date: NaiveDate,
     pub created_at: DateTime<Utc>,
 }
 
@@ -73,6 +74,7 @@ pub struct Expense {
     pub split_between: Vec<Uuid>,
     pub expense_type: String,
     pub transfer_to: Option<Uuid>,
+    pub expense_date: NaiveDate,
     pub created_at: DateTime<Utc>,
 }
 
@@ -114,6 +116,7 @@ pub struct CreateExpenseRequest {
     #[serde(default = "default_expense_type")]
     pub expense_type: String,
     pub transfer_to: Option<Uuid>,
+    pub expense_date: Option<NaiveDate>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,6 +128,7 @@ pub struct UpdateExpenseRequest {
     #[serde(default = "default_expense_type")]
     pub expense_type: String,
     pub transfer_to: Option<Uuid>,
+    pub expense_date: Option<NaiveDate>,
 }
 
 // Response DTOs

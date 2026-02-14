@@ -246,8 +246,8 @@ async fn get_expenses(
     
     // Get all expenses for this group
     let expense_rows: Vec<ExpenseRow> = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at 
-         FROM expenses WHERE group_id = $1 ORDER BY created_at DESC"
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at 
+         FROM expenses WHERE group_id = $1 ORDER BY expense_date DESC, created_at DESC"
     )
     .bind(auth.group_id)
     .fetch_all(pool)
@@ -280,6 +280,7 @@ async fn get_expenses(
             split_between: splits.into_iter().map(|s| s.member_id).collect(),
             expense_type: row.expense_type,
             transfer_to: row.transfer_to,
+            expense_date: row.expense_date,
             created_at: row.created_at,
         });
     }
@@ -296,14 +297,15 @@ async fn create_expense(
     let pool = db::get_pool();
     let expense_id = Uuid::new_v4();
     let created_at = Utc::now();
+    let expense_date = request.expense_date.unwrap_or_else(|| Utc::now().date_naive());
 
     // Convert f64 to BigDecimal
     let amount = BigDecimal::try_from(request.amount).map_err(|_| Status::BadRequest)?;
 
     // Insert expense
     sqlx::query(
-        "INSERT INTO expenses (id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+        "INSERT INTO expenses (id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
     )
     .bind(expense_id)
     .bind(auth.group_id)
@@ -312,6 +314,7 @@ async fn create_expense(
     .bind(request.paid_by)
     .bind(&request.expense_type)
     .bind(request.transfer_to)
+    .bind(expense_date)
     .bind(created_at)
     .execute(pool)
     .await
@@ -346,6 +349,7 @@ async fn create_expense(
         split_between: request.split_between.clone(),
         expense_type: request.expense_type.clone(),
         transfer_to: request.transfer_to,
+        expense_date,
         created_at,
     };
 
@@ -364,7 +368,7 @@ async fn update_expense(
 
     // Verify expense belongs to this group
     let _existing: ExpenseRow = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at 
          FROM expenses WHERE id = $1 AND group_id = $2"
     )
     .bind(expense_uuid)
@@ -378,17 +382,19 @@ async fn update_expense(
     .ok_or(Status::NotFound)?;
 
     let amount = BigDecimal::try_from(request.amount).map_err(|_| Status::BadRequest)?;
+    let expense_date = request.expense_date.unwrap_or(_existing.expense_date);
 
     // Update expense
     sqlx::query(
-        "UPDATE expenses SET description = $1, amount = $2, paid_by = $3, expense_type = $4, transfer_to = $5
-         WHERE id = $6"
+        "UPDATE expenses SET description = $1, amount = $2, paid_by = $3, expense_type = $4, transfer_to = $5, expense_date = $6
+         WHERE id = $7"
     )
     .bind(&request.description)
     .bind(&amount)
     .bind(request.paid_by)
     .bind(&request.expense_type)
     .bind(request.transfer_to)
+    .bind(expense_date)
     .bind(expense_uuid)
     .execute(pool)
     .await
@@ -432,6 +438,7 @@ async fn update_expense(
         split_between: request.split_between.clone(),
         expense_type: request.expense_type.clone(),
         transfer_to: request.transfer_to,
+        expense_date,
         created_at: _existing.created_at,
     };
 
@@ -449,7 +456,7 @@ async fn delete_expense(
 
     // Verify expense belongs to this group
     let _existing: ExpenseRow = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at 
          FROM expenses WHERE id = $1 AND group_id = $2"
     )
     .bind(expense_uuid)
@@ -506,7 +513,7 @@ async fn get_balances(
 
     // Get all expenses with splits
     let expense_rows: Vec<ExpenseRow> = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, expense_date, created_at 
          FROM expenses WHERE group_id = $1"
     )
     .bind(auth.group_id)
