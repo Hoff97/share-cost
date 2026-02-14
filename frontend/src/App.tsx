@@ -8,19 +8,15 @@ import { GroupList } from './components/GroupList';
 import type { StoredGroup } from './storage';
 import { getStoredGroups, saveGroup } from './storage';
 
-// Store token in URL hash for sharing (e.g., /#token=eyJ...)
+// Extract token from URL hash (used for share links)
 const getTokenFromUrl = (): string | null => {
   const hash = window.location.hash;
   const match = hash.match(/^#token=(.+)$/);
   return match ? match[1] : null;
 };
 
-const setTokenInUrl = (token: string) => {
-  window.history.pushState({}, '', `/#token=${token}`);
-};
-
 const clearTokenFromUrl = () => {
-  window.history.pushState({}, '', '/');
+  window.history.replaceState({}, '', '/');
 };
 
 function App() {
@@ -35,6 +31,8 @@ function App() {
     setStoredGroups(getStoredGroups());
     const urlToken = getTokenFromUrl();
     if (urlToken) {
+      // Clear token from URL immediately for security
+      clearTokenFromUrl();
       setToken(urlToken);
       loadGroup(urlToken);
     } else {
@@ -65,22 +63,19 @@ function App() {
     setGroup(newGroup);
     setToken(newToken);
     setShowCreate(false);
-    setTokenInUrl(newToken);
-    // Save to local storage
+    // Save to local storage (token is stored here, not in URL)
     saveGroup(newGroup.id, newGroup.name, newToken);
     setStoredGroups(getStoredGroups());
   };
 
   const handleSelectGroup = (groupToken: string) => {
     setToken(groupToken);
-    setTokenInUrl(groupToken);
     loadGroup(groupToken);
   };
 
   const handleBackToList = () => {
     setGroup(null);
     setToken(null);
-    clearTokenFromUrl();
     setStoredGroups(getStoredGroups());
   };
 

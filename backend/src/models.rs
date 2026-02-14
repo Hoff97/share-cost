@@ -1,7 +1,48 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use uuid::Uuid;
 
+// Database row types
+#[derive(Debug, Clone, FromRow)]
+pub struct GroupRow {
+    pub id: Uuid,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct MemberRow {
+    pub id: Uuid,
+    pub group_id: Uuid,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct ExpenseRow {
+    pub id: Uuid,
+    pub group_id: Uuid,
+    pub description: String,
+    pub amount: BigDecimal,
+    pub paid_by: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct ExpenseSplitMemberRow {
+    pub member_id: Uuid,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct ExpenseSplitRow {
+    pub id: Uuid,
+    pub expense_id: Uuid,
+    pub member_id: Uuid,
+}
+
+// API response types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Member {
     pub id: Uuid,
@@ -59,4 +100,14 @@ pub struct CreateExpenseRequest {
 pub struct GroupCreatedResponse {
     pub group: Group,
     pub token: String,
+}
+
+// Conversion helpers
+impl From<MemberRow> for Member {
+    fn from(row: MemberRow) -> Self {
+        Member {
+            id: row.id,
+            name: row.name,
+        }
+    }
 }

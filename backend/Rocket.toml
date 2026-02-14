@@ -1,0 +1,2 @@
+[default.databases.share_cost]
+url = "postgres://postgres:postgres@localhost:5432/share_cost"

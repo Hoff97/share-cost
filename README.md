@@ -1,6 +1,6 @@
 # Share Cost
 
-A web application for sharing costs between friends and groups. Built with React (frontend) and Rust/Rocket (backend). **No sign-up required** - just create a group and share the link!
+A web application for sharing costs between friends and groups. Built with React (frontend) and Rust/Rocket (backend) with PostgreSQL for persistent storage. **No sign-up required** - just create a group and share the link!
 
 ## Project Structure
 
@@ -14,11 +14,15 @@ share-cost/
 │       ├── api.ts
 │       ├── App.tsx
 │       └── App.css
-└── backend/           # Rust + Rocket
-    └── src/
-        ├── main.rs
-        ├── models.rs
-        └── routes.rs
+├── backend/           # Rust + Rocket
+│   └── src/
+│       ├── main.rs
+│       ├── models.rs
+│       ├── routes.rs
+│       ├── db.rs
+│       └── auth.rs
+│   └── migrations/    # SQL migrations
+└── docker-compose.yml # PostgreSQL database
 ```
 
 ## Features
@@ -28,6 +32,7 @@ share-cost/
 - **Expense Tracking**: Add expenses with flexible splitting options
 - **Balance Calculation**: Automatically calculates who owes whom
 - **Add Members Anytime**: New members can be added to existing groups
+- **Persistent Storage**: All data is stored in PostgreSQL
 
 ## Getting Started
 
@@ -36,6 +41,21 @@ share-cost/
 - Node.js 18+
 - Rust 1.70+
 - Cargo
+- Docker (for PostgreSQL) or PostgreSQL 14+
+
+### Starting the Database
+
+Using Docker (recommended):
+```bash
+docker-compose up -d
+```
+
+Or ensure you have PostgreSQL running with:
+- Host: localhost
+- Port: 5432
+- User: postgres
+- Password: postgres
+- Database: share_cost
 
 ### Running the Backend
 
@@ -45,6 +65,8 @@ cargo run
 ```
 
 The API will be available at `http://localhost:8000`
+
+Migrations will run automatically on startup.
 
 ### Running the Frontend
 

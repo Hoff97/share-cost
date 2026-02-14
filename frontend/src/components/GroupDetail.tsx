@@ -113,70 +113,46 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     <div className="group-detail">
       <div className="group-header">
         <h2>{group.name}</h2>
-        <button onClick={copyShareLink} className="share-btn">
-          {showShareLink ? '✓ Copied!' : '🔗 Share Link'}
-        </button>
-      </div>
-
-      <section className="identity-section">
-        <h3>Who are you?</h3>
-        <div className="identity-select">
-          <select 
-            value={selectedMemberId || ''} 
-            onChange={(e) => handleSelectMember(e.target.value)}
-          >
-            <option value="">Select yourself...</option>
-            {group.members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
-          {myBalance && (
-            <div className={`my-balance ${myBalance.balance >= 0 ? 'positive' : 'negative'}`}>
-              Your balance: {myBalance.balance >= 0 ? '+' : ''}${myBalance.balance.toFixed(2)}
+        <div className="header-actions">
+          {selectedMemberId ? (
+            <div className="identity-compact">
+              <span className="identity-label">You:</span>
+              <select 
+                value={selectedMemberId} 
+                onChange={(e) => handleSelectMember(e.target.value)}
+                className="identity-select-compact"
+              >
+                {group.members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+              {myBalance && (
+                <span className={`balance-badge ${myBalance.balance >= 0 ? 'positive' : 'negative'}`}>
+                  {myBalance.balance >= 0 ? '+' : ''}${myBalance.balance.toFixed(2)}
+                </span>
+              )}
             </div>
-          )}
-        </div>
-      </section>
-
-      <section className="members-section">
-        <h3>Members ({group.members.length})</h3>
-        <div className="members-chips">
-          {group.members.map((member) => (
-            <span key={member.id} className="member-chip">
-              {member.name}
-            </span>
-          ))}
-        </div>
-        <form onSubmit={handleAddMember} className="add-member-form">
-          <input
-            type="text"
-            placeholder="Add new member..."
-            value={newMemberName}
-            onChange={(e) => setNewMemberName(e.target.value)}
-          />
-          <button type="submit">Add</button>
-        </form>
-      </section>
-
-      <section className="balances-section">
-        <h3>Balances</h3>
-        <div className="balances-list">
-          {balances.map((balance) => (
-            <div
-              key={balance.user_id}
-              className={`balance-item ${balance.balance >= 0 ? 'positive' : 'negative'}`}
+          ) : (
+            <select 
+              value="" 
+              onChange={(e) => handleSelectMember(e.target.value)}
+              className="identity-select-prompt"
             >
-              <span className="name">{balance.user_name}</span>
-              <span className="amount">
-                {balance.balance >= 0 ? '+' : ''}
-                ${balance.balance.toFixed(2)}
-              </span>
-            </div>
-          ))}
+              <option value="">Who are you?</option>
+              {group.members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <button onClick={copyShareLink} className="share-btn">
+            {showShareLink ? '✓ Copied!' : '🔗 Share'}
+          </button>
         </div>
-      </section>
+      </div>
 
       <section className="add-expense-section">
         <h3>Add Expense</h3>
@@ -241,6 +217,47 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
             ))
           )}
         </div>
+      </section>
+
+      <section className="balances-section">
+        <h3>Balances</h3>
+        <div className="balances-list">
+          {balances.map((balance) => (
+            <div
+              key={balance.user_id}
+              className={`balance-item ${balance.balance >= 0 ? 'positive' : 'negative'} ${balance.user_id === selectedMemberId ? 'is-me' : ''}`}
+            >
+              <span className="name">
+                {balance.user_name}
+                {balance.user_id === selectedMemberId && <span className="me-tag"> (you)</span>}
+              </span>
+              <span className="amount">
+                {balance.balance >= 0 ? '+' : ''}
+                ${balance.balance.toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="members-section">
+        <h3>Members ({group.members.length})</h3>
+        <div className="members-chips">
+          {group.members.map((member) => (
+            <span key={member.id} className={`member-chip ${member.id === selectedMemberId ? 'is-me' : ''}`}>
+              {member.name}
+            </span>
+          ))}
+        </div>
+        <form onSubmit={handleAddMember} className="add-member-form">
+          <input
+            type="text"
+            placeholder="Add new member..."
+            value={newMemberName}
+            onChange={(e) => setNewMemberName(e.target.value)}
+          />
+          <button type="submit">Add</button>
+        </form>
       </section>
     </div>
   );
