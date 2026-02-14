@@ -10,6 +10,7 @@ export interface StoredGroup {
   selectedMemberId?: string;
   selectedMemberName?: string;
   cachedBalance?: number;
+  cachedCurrency?: string;
 }
 
 export const getStoredGroups = (): StoredGroup[] => {
@@ -70,11 +71,12 @@ export const setSelectedMember = (groupId: string, memberId: string, memberName:
   }
 };
 
-export const updateCachedBalance = (groupId: string, balance: number): void => {
+export const updateCachedBalance = (groupId: string, balance: number, currency?: string): void => {
   const groups = getStoredGroups();
   const group = groups.find(g => g.id === groupId);
   if (group) {
     group.cachedBalance = balance;
+    if (currency) group.cachedCurrency = currency;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
   }
 };

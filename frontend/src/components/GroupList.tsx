@@ -2,6 +2,15 @@ import { Title, Text, Card, Stack, Group as MGroup, Badge, ActionIcon, Paper } f
 import type { StoredGroup } from '../storage';
 import { removeGroup } from '../storage';
 
+const SYM: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', JPY: '¥' };
+const fmtAmt = (n: number, c?: string) => {
+  const cur = c || 'EUR';
+  const s = SYM[cur];
+  const abs = Math.abs(n).toFixed(2);
+  const sign = n >= 0 ? '+' : '-';
+  return s ? `${sign}${s}${abs}` : `${sign}${abs} ${cur}`;
+};
+
 interface GroupListProps {
   groups: StoredGroup[];
   onSelectGroup: (token: string) => void;
@@ -17,11 +26,15 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
     }
   };
 
-  const totalBalance = groups.reduce((sum, group) => {
-    return sum + (group.cachedBalance ?? 0);
-  }, 0);
-
   const groupsWithIdentity = groups.filter(g => g.selectedMemberId);
+
+  // Group balances by currency
+  const balanceByCurrency: Record<string, number> = {};
+  for (const g of groupsWithIdentity) {
+    const cur = g.cachedCurrency || 'EUR';
+    balanceByCurrency[cur] = (balanceByCurrency[cur] ?? 0) + (g.cachedBalance ?? 0);
+  }
+  const currencyEntries = Object.entries(balanceByCurrency);
 
   if (groups.length === 0) {
     return null;
@@ -31,18 +44,18 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
     <Stack gap="sm" mt="xl" style={{ textAlign: 'left' }}>
       <Title order={4}>Your Groups</Title>
 
-      {groupsWithIdentity.length > 0 && (
-        <Paper
-          p="sm"
-          radius="md"
-          bg={totalBalance >= 0 ? 'green.0' : 'red.0'}
-        >
-          <MGroup justify="space-between">
-            <Text fw={600} c={totalBalance >= 0 ? 'green.8' : 'red.8'}>Total Balance:</Text>
-            <Text fw={700} size="lg" c={totalBalance >= 0 ? 'green.8' : 'red.8'}>
-              {totalBalance >= 0 ? '+' : ''}${totalBalance.toFixed(2)}
-            </Text>
-          </MGroup>
+      {currencyEntries.length > 0 && (
+        <Paper p="sm" radius="md" bg="gray.0">
+          {currencyEntries.map(([cur, total]) => (
+            <MGroup key={cur} justify="space-between">
+              <Text fw={600} c={total >= 0 ? 'green.8' : 'red.8'}>
+                {currencyEntries.length > 1 ? `Balance (${cur}):` : 'Total Balance:'}
+              </Text>
+              <Text fw={700} size="lg" c={total >= 0 ? 'green.8' : 'red.8'}>
+                {fmtAmt(total, cur)}
+              </Text>
+            </MGroup>
+          ))}
         </Paper>
       )}
 
@@ -72,7 +85,7 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
                 variant="light"
                 color={group.cachedBalance >= 0 ? 'green' : 'red'}
               >
-                {group.cachedBalance >= 0 ? '+' : ''}${group.cachedBalance.toFixed(2)}
+                {fmtAmt(group.cachedBalance, group.cachedCurrency)}
               </Badge>
             )}
             <ActionIcon

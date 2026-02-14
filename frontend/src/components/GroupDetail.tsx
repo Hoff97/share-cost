@@ -15,14 +15,14 @@ interface GroupDetailProps {
   onGroupUpdated: () => void;
 }
 
-// Convert YYYY-MM-DD → MM.DD.YYYY
+// Convert YYYY-MM-DD → DD.MM.YYYY
 const formatDate = (iso: string) => {
   const [y, m, d] = iso.split('-');
-  return `${m}.${d}.${y}`;
+  return `${d}.${m}.${y}`;
 };
-// Convert MM.DD.YYYY → YYYY-MM-DD
+// Convert DD.MM.YYYY → YYYY-MM-DD
 const toIsoDate = (display: string) => {
-  const [m, d, y] = display.split('.');
+  const [d, m, y] = display.split('.');
   return `${y}-${m}-${d}`;
 };
 
@@ -97,10 +97,10 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     if (selectedMemberId) {
       const myBalance = balancesData.find(b => b.user_id === selectedMemberId);
       if (myBalance) {
-        updateCachedBalance(group.id, myBalance.balance);
+        updateCachedBalance(group.id, myBalance.balance, group.currency);
       }
     }
-  }, [token, selectedMemberId, group.id]);
+  }, [token, selectedMemberId, group.id, group.currency]);
 
   useEffect(() => {
     loadData();
@@ -211,7 +211,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       setSelectedMember(group.id, memberId, member.name);
       const myBalance = balances.find(b => b.user_id === memberId);
       if (myBalance) {
-        updateCachedBalance(group.id, myBalance.balance);
+        updateCachedBalance(group.id, myBalance.balance, group.currency);
       }
       // Auto-apply stored payment info if member has none set
       if (!member.paypal_email && !member.iban) {
@@ -647,7 +647,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                   )}
                   <TextInput
                     label="Date"
-                    placeholder="MM.DD.YYYY"
+                    placeholder="DD.MM.YYYY"
                     value={expenseDate}
                     onChange={(e) => setExpenseDate(e.target.value)}
                   />
@@ -770,7 +770,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                       )}
                       <TextInput
                         label="Date"
-                        placeholder="MM.DD.YYYY"
+                        placeholder="DD.MM.YYYY"
                         size="xs"
                         value={editExpenseDate}
                         onChange={(e) => setEditExpenseDate(e.target.value)}
