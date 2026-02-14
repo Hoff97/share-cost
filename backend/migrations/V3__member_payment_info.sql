@@ -1,0 +1,2 @@
+ALTER TABLE members ADD COLUMN paypal_email VARCHAR(255);
+ALTER TABLE members ADD COLUMN iban VARCHAR(34);

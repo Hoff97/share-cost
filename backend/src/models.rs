@@ -17,6 +17,8 @@ pub struct MemberRow {
     pub id: Uuid,
     pub group_id: Uuid,
     pub name: String,
+    pub paypal_email: Option<String>,
+    pub iban: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -49,6 +51,8 @@ pub struct ExpenseSplitRow {
 pub struct Member {
     pub id: Uuid,
     pub name: String,
+    pub paypal_email: Option<String>,
+    pub iban: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,6 +95,12 @@ pub struct AddMemberRequest {
     pub name: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateMemberPaymentRequest {
+    pub paypal_email: Option<String>,
+    pub iban: Option<String>,
+}
+
 fn default_expense_type() -> String {
     "expense".to_string()
 }
@@ -119,6 +129,8 @@ impl From<MemberRow> for Member {
         Member {
             id: row.id,
             name: row.name,
+            paypal_email: row.paypal_email,
+            iban: row.iban,
         }
     }
 }

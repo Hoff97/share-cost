@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
-  Group as MGroup, SegmentedControl, Checkbox, Badge, Card, Pill,
-  Divider, CopyButton, Tooltip, Collapse, Tabs,
+  Group as MGroup, SegmentedControl, Checkbox, Badge, Card,
+  Divider, CopyButton, Tooltip, Collapse, Tabs, Anchor,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import * as api from '../api';
@@ -25,6 +25,9 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [expenseType, setExpenseType] = useState('expense');
   const [transferTo, setTransferTo] = useState<string | null>(null);
   const [newMemberName, setNewMemberName] = useState('');
+  const [editingPayment, setEditingPayment] = useState<string | null>(null);
+  const [editPaypal, setEditPaypal] = useState('');
+  const [editIban, setEditIban] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(() => {
     const stored = getStoredGroup(group.id);
     return stored?.selectedMemberId ?? null;
@@ -94,6 +97,22 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
   const getMemberName = (memberId: string) => {
     return group.members.find((m) => m.id === memberId)?.name || 'Unknown';
+  };
+
+  const getMember = (memberId: string) => {
+    return group.members.find((m) => m.id === memberId);
+  };
+
+  const handleStartEditPayment = (member: api.Member) => {
+    setEditingPayment(member.id);
+    setEditPaypal(member.paypal_email || '');
+    setEditIban(member.iban || '');
+  };
+
+  const handleSavePayment = async (memberId: string) => {
+    await api.updateMemberPayment(token, memberId, editPaypal || null, editIban || null);
+    setEditingPayment(null);
+    onGroupUpdated();
   };
 
   const shareUrl = `${window.location.origin}/#token=${token}`;
@@ -181,11 +200,11 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
   // Get settlements relevant to a specific member
   const getSettlementsForMember = (userId: string) => {
-    const owes: { name: string; amount: number }[] = [];
-    const owedBy: { name: string; amount: number }[] = [];
+    const owes: { name: string; id: string; amount: number }[] = [];
+    const owedBy: { name: string; id: string; amount: number }[] = [];
     for (const s of settlements) {
-      if (s.from === userId) owes.push({ name: s.toName, amount: s.amount });
-      if (s.to === userId) owedBy.push({ name: s.fromName, amount: s.amount });
+      if (s.from === userId) owes.push({ name: s.toName, id: s.to, amount: s.amount });
+      if (s.to === userId) owedBy.push({ name: s.fromName, id: s.from, amount: s.amount });
     }
     return { owes, owedBy };
   };
@@ -437,13 +456,46 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                   <Collapse in={isExpanded}>
                     <Divider my="xs" />
                     <Stack gap={4}>
-                      {owes.map((o, i) => (
-                        <MGroup key={`owe-${i}`} gap="xs">
-                          <Text size="sm" c="red">→ Pay</Text>
-                          <Text size="sm" fw={500}>{o.name}</Text>
-                          <Text size="sm" fw={600} c="red">${o.amount.toFixed(2)}</Text>
-                        </MGroup>
-                      ))}
+                      {owes.map((o, i) => {
+                        const recipient = getMember(o.id);
+                        return (
+                          <div key={`owe-${i}`}>
+                            <MGroup gap="xs">
+                              <Text size="sm" c="red">→ Pay</Text>
+                              <Text size="sm" fw={500}>{o.name}</Text>
+                              <Text size="sm" fw={600} c="red">${o.amount.toFixed(2)}</Text>
+                            </MGroup>
+                            {recipient?.paypal_email && (
+                              <MGroup gap="xs" ml="md" mt={2}>
+                                <Badge size="xs" color="blue" variant="light">PayPal</Badge>
+                                <Anchor
+                                  size="xs"
+                                  href={`https://paypal.me/${recipient.paypal_email}/${o.amount.toFixed(2).replace('.', ',')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  Pay via PayPal →
+                                </Anchor>
+                              </MGroup>
+                            )}
+                            {recipient?.iban && (
+                              <MGroup gap="xs" ml="md" mt={2}>
+                                <Badge size="xs" color="gray" variant="light">IBAN</Badge>
+                                <Text size="xs" ff="monospace">{recipient.iban}</Text>
+                                <CopyButton value={recipient.iban}>
+                                  {({ copied, copy }) => (
+                                    <Tooltip label={copied ? 'Copied!' : 'Copy IBAN'}>
+                                      <Button size="compact-xs" variant="subtle" onClick={(e) => { e.stopPropagation(); copy(); }}>
+                                        {copied ? '✓' : '📋'}
+                                      </Button>
+                                    </Tooltip>
+                                  )}
+                                </CopyButton>
+                              </MGroup>
+                            )}
+                          </div>
+                        );
+                      })}
                       {owedBy.map((o, i) => (
                         <MGroup key={`owed-${i}`} gap="xs">
                           <Text size="sm" c="green">← Receive from</Text>
@@ -464,20 +516,89 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
         {/* Members Tab */}
         <Tabs.Panel value="members" pt="md">
-          <MGroup gap="xs" mb="sm">
+          <Stack gap="xs">
             {group.members.map((member) => (
-              <Pill
+              <Card
                 key={member.id}
-                size="md"
+                padding="sm"
+                radius="md"
+                withBorder
                 style={member.id === selectedMemberId ? {
-                  background: 'var(--mantine-color-blue-5)',
-                  color: 'white',
+                  borderColor: 'var(--mantine-color-blue-5)',
+                  borderWidth: 2,
+                  background: 'var(--mantine-color-blue-0)',
                 } : undefined}
               >
-                {member.name}
-              </Pill>
+                <MGroup justify="space-between" align="center">
+                  <Text fw={600}>
+                    {member.name}
+                    {member.id === selectedMemberId && (
+                      <Text component="span" c="blue" fw={500}> (you)</Text>
+                    )}
+                  </Text>
+                  <MGroup gap="xs">
+                    {member.paypal_email && <Badge size="xs" color="blue" variant="light">PayPal</Badge>}
+                    {member.iban && <Badge size="xs" color="gray" variant="light">IBAN</Badge>}
+                    {editingPayment !== member.id && (
+                      <Button size="compact-xs" variant="subtle" onClick={() => handleStartEditPayment(member)}>
+                        ✏️
+                      </Button>
+                    )}
+                  </MGroup>
+                </MGroup>
+                {editingPayment === member.id && (
+                  <>
+                    <Divider my="xs" />
+                    <Stack gap="xs">
+                      <TextInput
+                        size="xs"
+                        placeholder="PayPal email or PayPal.me username"
+                        leftSection={<Text size="xs">💳</Text>}
+                        value={editPaypal}
+                        onChange={(e) => setEditPaypal(e.target.value)}
+                      />
+                      <TextInput
+                        size="xs"
+                        placeholder="IBAN"
+                        leftSection={<Text size="xs">🏦</Text>}
+                        value={editIban}
+                        onChange={(e) => setEditIban(e.target.value)}
+                      />
+                      <MGroup gap="xs">
+                        <Button size="compact-xs" onClick={() => handleSavePayment(member.id)}>Save</Button>
+                        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditingPayment(null)}>Cancel</Button>
+                      </MGroup>
+                    </Stack>
+                  </>
+                )}
+                {editingPayment !== member.id && (member.paypal_email || member.iban) && (
+                  <>
+                    <Divider my="xs" />
+                    <Stack gap={2}>
+                      {member.paypal_email && (
+                        <Text size="xs" c="dimmed">PayPal: {member.paypal_email}</Text>
+                      )}
+                      {member.iban && (
+                        <MGroup gap="xs">
+                          <Text size="xs" c="dimmed">IBAN: {member.iban}</Text>
+                          <CopyButton value={member.iban}>
+                            {({ copied, copy }) => (
+                              <Tooltip label={copied ? 'Copied!' : 'Copy IBAN'}>
+                                <Button size="compact-xs" variant="subtle" onClick={copy}>
+                                  {copied ? '✓' : '📋'}
+                                </Button>
+                              </Tooltip>
+                            )}
+                          </CopyButton>
+                        </MGroup>
+                      )}
+                    </Stack>
+                  </>
+                )}
+              </Card>
             ))}
-          </MGroup>
+          </Stack>
+          <Divider my="sm" />
           <form onSubmit={handleAddMember}>
             <MGroup gap="xs">
               <TextInput

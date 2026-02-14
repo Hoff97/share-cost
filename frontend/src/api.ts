@@ -3,6 +3,8 @@ const API_BASE = 'http://localhost:8000/api';
 export interface Member {
   id: string;
   name: string;
+  paypal_email: string | null;
+  iban: string | null;
 }
 
 export interface Group {
@@ -104,6 +106,21 @@ export const createExpense = async (
 export const getBalances = async (token: string): Promise<Balance[]> => {
   const res = await fetch(`${API_BASE}/groups/current/balances`, {
     headers: authHeaders(token),
+  });
+  return res.json();
+};
+
+// Member payment info
+export const updateMemberPayment = async (
+  token: string,
+  memberId: string,
+  paypalEmail: string | null,
+  iban: string | null
+): Promise<Member> => {
+  const res = await fetch(`${API_BASE}/groups/current/members/${memberId}/payment`, {
+    method: 'PUT',
+    headers: authHeaders(token),
+    body: JSON.stringify({ paypal_email: paypalEmail || null, iban: iban || null }),
   });
   return res.json();
 };

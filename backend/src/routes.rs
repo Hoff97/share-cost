@@ -61,6 +61,8 @@ async fn create_group(
         members.push(Member {
             id: member_id,
             name: name.clone(),
+            paypal_email: None,
+            iban: None,
         });
     }
 
@@ -100,7 +102,7 @@ async fn get_current_group(
 
     // Get members
     let member_rows: Vec<MemberRow> = sqlx::query_as(
-        "SELECT id, group_id, name, created_at FROM members WHERE group_id = $1 ORDER BY created_at"
+        "SELECT id, group_id, name, paypal_email, iban, created_at FROM members WHERE group_id = $1 ORDER BY created_at"
     )
     .bind(auth.group_id)
     .fetch_all(pool)
@@ -116,6 +118,8 @@ async fn get_current_group(
         members: member_rows.into_iter().map(|r| Member {
             id: r.id,
             name: r.name,
+            paypal_email: r.paypal_email,
+            iban: r.iban,
         }).collect(),
         created_at: group_row.created_at,
     };
@@ -162,7 +166,7 @@ async fn add_member(
 
     // Get all members
     let member_rows: Vec<MemberRow> = sqlx::query_as(
-        "SELECT id, group_id, name, created_at FROM members WHERE group_id = $1 ORDER BY created_at"
+        "SELECT id, group_id, name, paypal_email, iban, created_at FROM members WHERE group_id = $1 ORDER BY created_at"
     )
     .bind(auth.group_id)
     .fetch_all(pool)
@@ -178,11 +182,59 @@ async fn add_member(
         members: member_rows.into_iter().map(|r| Member {
             id: r.id,
             name: r.name,
+            paypal_email: r.paypal_email,
+            iban: r.iban,
         }).collect(),
         created_at: group_row.created_at,
     };
 
     Ok(Json(group))
+}
+
+// Update member payment info - requires valid JWT
+#[put("/groups/current/members/<member_id>/payment", data = "<request>")]
+async fn update_member_payment(
+    auth: GroupAuth,
+    member_id: &str,
+    request: Json<UpdateMemberPaymentRequest>,
+) -> Result<Json<Member>, Status> {
+    let pool = db::get_pool();
+    let member_uuid = Uuid::parse_str(member_id).map_err(|_| Status::BadRequest)?;
+
+    // Verify member belongs to this group
+    let member_row: MemberRow = sqlx::query_as(
+        "SELECT id, group_id, name, paypal_email, iban, created_at FROM members WHERE id = $1 AND group_id = $2"
+    )
+    .bind(member_uuid)
+    .bind(auth.group_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Failed to fetch member: {}", e);
+        Status::InternalServerError
+    })?
+    .ok_or(Status::NotFound)?;
+
+    // Update payment info
+    sqlx::query(
+        "UPDATE members SET paypal_email = $1, iban = $2 WHERE id = $3"
+    )
+    .bind(&request.paypal_email)
+    .bind(&request.iban)
+    .bind(member_uuid)
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Failed to update member payment info: {}", e);
+        Status::InternalServerError
+    })?;
+
+    Ok(Json(Member {
+        id: member_row.id,
+        name: member_row.name,
+        paypal_email: request.paypal_email.clone(),
+        iban: request.iban.clone(),
+    }))
 }
 
 // Get expenses - requires valid JWT
@@ -309,7 +361,7 @@ async fn get_balances(
     
     // Get all members
     let member_rows: Vec<MemberRow> = sqlx::query_as(
-        "SELECT id, group_id, name, created_at FROM members WHERE group_id = $1"
+        "SELECT id, group_id, name, paypal_email, iban, created_at FROM members WHERE group_id = $1"
     )
     .bind(auth.group_id)
     .fetch_all(pool)
@@ -433,6 +485,7 @@ pub fn get_routes() -> Vec<Route> {
         create_group,
         get_current_group,
         add_member,
+        update_member_payment,
         get_expenses,
         create_expense,
         get_balances
