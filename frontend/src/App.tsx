@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import './App.css';
+import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert } from '@mantine/core';
 import * as api from './api';
 import type { Group } from './api';
 import { CreateGroup } from './components/CreateGroup';
@@ -31,7 +31,6 @@ function App() {
     setStoredGroups(getStoredGroups());
     const urlToken = getTokenFromUrl();
     if (urlToken) {
-      // Clear token from URL immediately for security
       clearTokenFromUrl();
       setToken(urlToken);
       loadGroup(urlToken);
@@ -47,7 +46,6 @@ function App() {
       const groupData = await api.getGroup(authToken);
       if (groupData) {
         setGroup(groupData);
-        // Save to local storage
         saveGroup(groupData.id, groupData.name, authToken);
         setStoredGroups(getStoredGroups());
       } else {
@@ -63,7 +61,6 @@ function App() {
     setGroup(newGroup);
     setToken(newToken);
     setShowCreate(false);
-    // Save to local storage (token is stored here, not in URL)
     saveGroup(newGroup.id, newGroup.name, newToken);
     setStoredGroups(getStoredGroups());
   };
@@ -88,83 +85,81 @@ function App() {
 
   if (loading) {
     return (
-      <div className="app">
-        <header>
-          <h1>💰 Share Cost</h1>
-        </header>
-        <main className="loading">
-          <p>Loading...</p>
-        </main>
-      </div>
+      <Container size="sm" py="xl">
+        <Stack align="center" gap="md">
+          <Title order={1}>💰 Share Cost</Title>
+          <Center py="xl">
+            <Loader size="lg" />
+          </Center>
+        </Stack>
+      </Container>
     );
   }
 
   if (error) {
     return (
-      <div className="app">
-        <header>
-          <h1>💰 Share Cost</h1>
-        </header>
-        <main className="error">
-          <p>{error}</p>
-          <button onClick={() => { setError(null); window.location.hash = ''; }}>
+      <Container size="sm" py="xl">
+        <Stack align="center" gap="md">
+          <Title order={1}>💰 Share Cost</Title>
+          <Alert color="red" title="Error" w="100%">
+            {error}
+          </Alert>
+          <Button onClick={() => { setError(null); window.location.hash = ''; }}>
             Create a New Group
-          </button>
-        </main>
-      </div>
+          </Button>
+        </Stack>
+      </Container>
     );
   }
 
   if (group && token) {
     return (
-      <div className="app">
-        <header>
-          <h1>💰 Share Cost</h1>
+      <Container size="sm" py="xl">
+        <MGroup justify="space-between" align="center" mb="lg">
+          <Title order={1}>💰 Share Cost</Title>
           {storedGroups.length > 0 && (
-            <button className="back-btn" onClick={handleBackToList}>
+            <Button variant="subtle" onClick={handleBackToList}>
               ← All Groups
-            </button>
+            </Button>
           )}
-        </header>
-        <main>
-          <GroupDetail
-            group={group}
-            token={token}
-            onGroupUpdated={refreshGroup}
-          />
-        </main>
-      </div>
+        </MGroup>
+        <GroupDetail
+          group={group}
+          token={token}
+          onGroupUpdated={refreshGroup}
+        />
+      </Container>
     );
   }
 
   return (
-    <div className="app">
-      <header>
-        <h1>💰 Share Cost</h1>
-        <p className="tagline">Split expenses with friends, no sign-up required</p>
-      </header>
-      <main>
-        {showCreate ? (
-          <CreateGroup
-            onGroupCreated={handleGroupCreated}
-            onCancel={() => setShowCreate(false)}
-          />
-        ) : (
-          <div className="welcome">
-            <p>Create a group to start tracking shared expenses.</p>
-            <p>Share the link with your friends - anyone with the link can access the group.</p>
-            <button onClick={() => setShowCreate(true)} className="create-btn">
+    <Container size="sm" py="xl">
+      <Stack align="center" gap="md">
+        <Title order={1}>💰 Share Cost</Title>
+        <Text c="dimmed">Split expenses with friends, no sign-up required</Text>
+      </Stack>
+      {showCreate ? (
+        <CreateGroup
+          onGroupCreated={handleGroupCreated}
+          onCancel={() => setShowCreate(false)}
+        />
+      ) : (
+        <Paper shadow="xs" p="xl" mt="lg" radius="md">
+          <Stack align="center" gap="md">
+            <Text>Create a group to start tracking shared expenses.</Text>
+            <Text>Share the link with your friends — anyone with the link can access the group.</Text>
+            <Button size="lg" onClick={() => setShowCreate(true)}>
               Create New Group
-            </button>
-            <GroupList
-              groups={storedGroups}
-              onSelectGroup={handleSelectGroup}
-              onGroupRemoved={() => setStoredGroups(getStoredGroups())}
-            />
-          </div>
-        )}
-      </main>
-    </div>
+            </Button>
+          </Stack>
+          <GroupList
+            groups={storedGroups}
+            onSelectGroup={handleSelectGroup}
+            onGroupRemoved={() => setStoredGroups(getStoredGroups())}
+          />
+        </Paper>
+      )}
+    </Container>
   );
 }
 

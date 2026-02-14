@@ -1,6 +1,6 @@
+import { Title, Text, Card, Stack, Group as MGroup, Badge, ActionIcon, Paper } from '@mantine/core';
 import type { StoredGroup } from '../storage';
 import { removeGroup } from '../storage';
-import './GroupList.css';
 
 interface GroupListProps {
   groups: StoredGroup[];
@@ -17,13 +17,6 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
     }
   };
 
-  const formatBalance = (balance: number | undefined) => {
-    if (balance === undefined) return null;
-    const sign = balance >= 0 ? '+' : '';
-    return `${sign}$${balance.toFixed(2)}`;
-  };
-
-  // Calculate total balance across all groups
   const totalBalance = groups.reduce((sum, group) => {
     return sum + (group.cachedBalance ?? 0);
   }, 0);
@@ -35,44 +28,64 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
   }
 
   return (
-    <div className="group-list">
-      <h3>Your Groups</h3>
-      
+    <Stack gap="sm" mt="xl" style={{ textAlign: 'left' }}>
+      <Title order={4}>Your Groups</Title>
+
       {groupsWithIdentity.length > 0 && (
-        <div className={`total-balance ${totalBalance >= 0 ? 'positive' : 'negative'}`}>
-          <span>Total Balance:</span>
-          <span className="total-amount">
-            {totalBalance >= 0 ? '+' : ''}${totalBalance.toFixed(2)}
-          </span>
-        </div>
+        <Paper
+          p="sm"
+          radius="md"
+          bg={totalBalance >= 0 ? 'green.0' : 'red.0'}
+        >
+          <MGroup justify="space-between">
+            <Text fw={600} c={totalBalance >= 0 ? 'green.8' : 'red.8'}>Total Balance:</Text>
+            <Text fw={700} size="lg" c={totalBalance >= 0 ? 'green.8' : 'red.8'}>
+              {totalBalance >= 0 ? '+' : ''}${totalBalance.toFixed(2)}
+            </Text>
+          </MGroup>
+        </Paper>
       )}
 
-      <ul>
-        {groups.map(group => (
-          <li key={group.id} onClick={() => onSelectGroup(group.token)}>
-            <div className="group-info">
-              <span className="group-name">{group.name}</span>
-              <span className="group-accessed">
-                {group.selectedMemberName 
-                  ? `You: ${group.selectedMemberName}` 
+      {groups.map(group => (
+        <Card
+          key={group.id}
+          padding="sm"
+          radius="md"
+          withBorder
+          onClick={() => onSelectGroup(group.token)}
+          style={{ cursor: 'pointer', transition: 'transform 0.1s' }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateX(4px)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
+        >
+          <MGroup justify="space-between" wrap="nowrap">
+            <div style={{ flex: 1 }}>
+              <Text fw={500}>{group.name}</Text>
+              <Text size="xs" c="dimmed">
+                {group.selectedMemberName
+                  ? `You: ${group.selectedMemberName}`
                   : 'Select yourself in group'}
-              </span>
+              </Text>
             </div>
             {group.cachedBalance !== undefined && (
-              <span className={`group-balance ${group.cachedBalance >= 0 ? 'positive' : 'negative'}`}>
-                {formatBalance(group.cachedBalance)}
-              </span>
+              <Badge
+                size="lg"
+                variant="light"
+                color={group.cachedBalance >= 0 ? 'green' : 'red'}
+              >
+                {group.cachedBalance >= 0 ? '+' : ''}${group.cachedBalance.toFixed(2)}
+              </Badge>
             )}
-            <button
-              className="remove-btn"
+            <ActionIcon
+              variant="subtle"
+              color="gray"
               onClick={(e) => handleRemove(e, group)}
               title="Remove from list"
             >
               ×
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
+            </ActionIcon>
+          </MGroup>
+        </Card>
+      ))}
+    </Stack>
   );
 };

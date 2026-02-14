@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import {
+  Paper, Title, TextInput, Button, Stack, Pill, Group as MGroup,
+} from '@mantine/core';
 import * as api from '../api';
 import type { Group } from '../api';
 
@@ -40,62 +43,55 @@ export function CreateGroup({ onGroupCreated, onCancel }: CreateGroupProps) {
   };
 
   return (
-    <div className="create-group">
-      <h2>Create New Group</h2>
+    <Paper shadow="xs" p="xl" mt="lg" radius="md" withBorder>
+      <Title order={3} mb="md">Create New Group</Title>
       <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="groupName">Group Name</label>
-          <input
-            id="groupName"
-            type="text"
+        <Stack gap="md">
+          <TextInput
+            label="Group Name"
             placeholder="e.g., Trip to Paris, Roommates"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-        </div>
 
-        <div className="form-group">
-          <label>Members (at least 2)</label>
-          <div className="member-input-row">
-            <input
-              type="text"
+          <div>
+            <TextInput
+              label="Members (at least 2)"
               placeholder="Enter member name"
               value={memberInput}
               onChange={(e) => setMemberInput(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
+              rightSection={
+                <Button size="compact-xs" variant="light" onClick={handleAddMember}>
+                  Add
+                </Button>
+              }
+              rightSectionWidth={60}
             />
-            <button type="button" onClick={handleAddMember} className="add-btn">
-              Add
-            </button>
-          </div>
-          
-          {members.length > 0 && (
-            <div className="members-list">
-              {members.map((member) => (
-                <span key={member} className="member-tag">
-                  {member}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveMember(member)}
-                    className="remove-btn"
+            {members.length > 0 && (
+              <MGroup gap="xs" mt="sm">
+                {members.map((member) => (
+                  <Pill
+                    key={member}
+                    withRemoveButton
+                    onRemove={() => handleRemoveMember(member)}
+                    size="md"
                   >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+                    {member}
+                  </Pill>
+                ))}
+              </MGroup>
+            )}
+          </div>
 
-        <div className="button-row">
-          <button type="button" onClick={onCancel} className="cancel-btn">
-            Cancel
-          </button>
-          <button type="submit" disabled={!name || members.length < 2}>
-            Create Group
-          </button>
-        </div>
+          <MGroup gap="sm" grow>
+            <Button variant="default" onClick={onCancel}>Cancel</Button>
+            <Button type="submit" disabled={!name || members.length < 2}>
+              Create Group
+            </Button>
+          </MGroup>
+        </Stack>
       </form>
-    </div>
+    </Paper>
   );
 }
