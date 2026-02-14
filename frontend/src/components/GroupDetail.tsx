@@ -7,7 +7,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import * as api from '../api';
 import type { Group, Expense, Balance } from '../api';
-import { getStoredGroup, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
+import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
 
 interface GroupDetailProps {
   group: Group;
@@ -215,6 +215,13 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
   const [addEntryOpened, { toggle: toggleAddEntry, close: closeAddEntry }] = useDisclosure(false);
   const [expandedBalances, setExpandedBalances] = useState<Set<string>>(new Set());
+  const [crossGroupTransfer, setCrossGroupTransfer] = useState<{
+    fromId: string; fromName: string; toId: string; toName: string; amount: number;
+    targetGroupId: string | null; targetGroupToken: string | null; targetGroupName: string | null;
+    targetGroupMembers: api.Member[];
+    creditorInTargetId: string | null; myIdInTarget: string | null;
+    loading: boolean;
+  } | null>(null);
 
   const toggleBalanceExpanded = (userId: string) => {
     setExpandedBalances(prev => {
@@ -285,6 +292,107 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       if (s.to === userId) owedBy.push({ name: s.fromName, id: s.from, amount: s.amount });
     }
     return { owes, owedBy };
+  };
+
+  // Cross-group balance transfer
+  const otherGroups = useMemo(() => {
+    return getStoredGroups().filter(g => g.id !== group.id);
+  }, [group.id]);
+
+  const handleStartCrossGroupTransfer = (fromId: string, fromName: string, toId: string, toName: string, amount: number) => {
+    setCrossGroupTransfer({
+      fromId, fromName, toId, toName, amount,
+      targetGroupId: null, targetGroupToken: null, targetGroupName: null,
+      targetGroupMembers: [],
+      creditorInTargetId: null, myIdInTarget: null,
+      loading: false,
+    });
+  };
+
+  // Find closest name match from a list of members (case-insensitive substring / prefix)
+  const findClosestMember = (name: string, members: api.Member[], excludeId?: string | null): string | null => {
+    const lower = name.toLowerCase();
+    const candidates = excludeId ? members.filter(m => m.id !== excludeId) : members;
+    // Exact match
+    const exact = candidates.find(m => m.name.toLowerCase() === lower);
+    if (exact) return exact.id;
+    // Starts with same prefix (first name match)
+    const firstName = lower.split(/\s+/)[0];
+    const prefix = candidates.find(m => m.name.toLowerCase().split(/\s+/)[0] === firstName);
+    if (prefix) return prefix.id;
+    // Contains
+    const contains = candidates.find(m => m.name.toLowerCase().includes(lower) || lower.includes(m.name.toLowerCase()));
+    if (contains) return contains.id;
+    return null;
+  };
+
+  const handleSelectTargetGroup = async (groupId: string) => {
+    const targetStored = otherGroups.find(g => g.id === groupId);
+    if (!targetStored || !crossGroupTransfer) return;
+
+    // Pre-select based on whether the current user is the debtor or the creditor
+    const targetIdentity = targetStored.selectedMemberId || null;
+    let preCreditorId: string | null = null;
+    let preMyId: string | null = null;
+    if (selectedMemberId && targetIdentity) {
+      if (selectedMemberId === crossGroupTransfer.fromId) {
+        // Current user is the debtor → pre-select them as "you" in the target group
+        preMyId = targetIdentity;
+      } else if (selectedMemberId === crossGroupTransfer.toId) {
+        // Current user is the creditor → pre-select them as the creditor in the target group
+        preCreditorId = targetIdentity;
+      }
+      // Otherwise user is neither party → no pre-selection
+    }
+
+    setCrossGroupTransfer(prev => prev ? {
+      ...prev, loading: true, targetGroupId: groupId,
+      targetGroupName: targetStored.name, targetGroupToken: targetStored.token,
+      targetGroupMembers: [], creditorInTargetId: preCreditorId,
+      myIdInTarget: preMyId,
+    } : null);
+    const targetGroup = await api.getGroup(targetStored.token);
+    if (!targetGroup) {
+      setCrossGroupTransfer(prev => prev ? { ...prev, loading: false } : null);
+      return;
+    }
+
+    // Fill remaining empty fields via closest name match
+    let finalCreditorId = preCreditorId;
+    let finalMyId = preMyId;
+    if (!finalCreditorId) {
+      finalCreditorId = findClosestMember(crossGroupTransfer.toName, targetGroup.members, finalMyId);
+    }
+    if (!finalMyId) {
+      finalMyId = findClosestMember(crossGroupTransfer.fromName, targetGroup.members, finalCreditorId);
+    }
+
+    setCrossGroupTransfer(prev => prev ? {
+      ...prev, targetGroupMembers: targetGroup.members, loading: false,
+      creditorInTargetId: finalCreditorId, myIdInTarget: finalMyId,
+    } : null);
+  };
+
+  const handleConfirmCrossGroupTransfer = async () => {
+    if (!crossGroupTransfer?.targetGroupToken || !crossGroupTransfer.creditorInTargetId || !crossGroupTransfer.myIdInTarget) return;
+    const { fromId, toId, amount, targetGroupToken, targetGroupName, creditorInTargetId, myIdInTarget, targetGroupMembers, targetGroupId } = crossGroupTransfer;
+    const myNameInTarget = targetGroupMembers.find(m => m.id === myIdInTarget)?.name || 'Unknown';
+
+    // Settle debt in current group
+    await api.createExpense(token, `Balance transferred to ${targetGroupName}`, amount, fromId, [], 'transfer', toId);
+    // Create corresponding debt in target group
+    await api.createExpense(targetGroupToken, `Balance transferred from ${group.name}`, amount, creditorInTargetId, [], 'transfer', myIdInTarget);
+
+    // Save identity in target group if not already set
+    if (targetGroupId) {
+      const targetStored = getStoredGroup(targetGroupId);
+      if (!targetStored?.selectedMemberId) {
+        setSelectedMember(targetGroupId, myIdInTarget, myNameInTarget);
+      }
+    }
+
+    setCrossGroupTransfer(null);
+    loadData();
   };
 
   return (
@@ -649,6 +757,75 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                                   )}
                                 </CopyButton>
                               </MGroup>
+                            )}
+                            {otherGroups.length > 0 && (
+                              crossGroupTransfer?.fromId === balance.user_id && crossGroupTransfer?.toId === o.id ? (
+                                <Paper p="xs" ml="md" mt={4} withBorder radius="sm" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                                  <Stack gap="xs">
+                                    <Select
+                                      size="xs"
+                                      placeholder="Select group"
+                                      data={otherGroups.map(g => ({ value: g.id, label: g.name }))}
+                                      value={crossGroupTransfer.targetGroupId}
+                                      onChange={(val) => val && handleSelectTargetGroup(val)}
+                                    />
+                                    {crossGroupTransfer.loading && <Text size="xs" c="dimmed">Loading members...</Text>}
+                                    {crossGroupTransfer.targetGroupMembers.length > 0 && (
+                                      <>
+                                        <Select
+                                          size="xs"
+                                          label={`Who is ${o.name} in ${crossGroupTransfer.targetGroupName}?`}
+                                          placeholder="Select member"
+                                          data={crossGroupTransfer.targetGroupMembers.map(m => ({ value: m.id, label: m.name }))}
+                                          value={crossGroupTransfer.creditorInTargetId}
+                                          onChange={(val) => setCrossGroupTransfer(prev => prev ? { ...prev, creditorInTargetId: val } : null)}
+                                        />
+                                        <Select
+                                          size="xs"
+                                          label={`Who is ${balance.user_name} in ${crossGroupTransfer.targetGroupName}?`}
+                                          placeholder="Select member"
+                                          data={crossGroupTransfer.targetGroupMembers.filter(m => m.id !== crossGroupTransfer.creditorInTargetId).map(m => ({ value: m.id, label: m.name }))}
+                                          value={crossGroupTransfer.myIdInTarget}
+                                          onChange={(val) => setCrossGroupTransfer(prev => prev ? { ...prev, myIdInTarget: val } : null)}
+                                        />
+                                        <MGroup gap="xs">
+                                          <Button
+                                            size="compact-xs"
+                                            color="violet"
+                                            disabled={!crossGroupTransfer.creditorInTargetId || !crossGroupTransfer.myIdInTarget}
+                                            onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleConfirmCrossGroupTransfer(); }}
+                                          >
+                                            Transfer ${o.amount.toFixed(2)}
+                                          </Button>
+                                          <Button
+                                            size="compact-xs"
+                                            variant="subtle"
+                                            color="gray"
+                                            onClick={(e: React.MouseEvent) => { e.stopPropagation(); setCrossGroupTransfer(null); }}
+                                          >
+                                            Cancel
+                                          </Button>
+                                        </MGroup>
+                                      </>
+                                    )}
+                                  </Stack>
+                                </Paper>
+                              ) : (
+                                <MGroup gap="xs" ml="md" mt={2}>
+                                  <Badge size="xs" color="violet" variant="light">Group</Badge>
+                                  <Button
+                                    size="compact-xs"
+                                    variant="subtle"
+                                    color="violet"
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      handleStartCrossGroupTransfer(balance.user_id, balance.user_name, o.id, o.name, o.amount);
+                                    }}
+                                  >
+                                    Transfer to another group →
+                                  </Button>
+                                </MGroup>
+                              )
                             )}
                           </div>
                         );
