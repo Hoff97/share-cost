@@ -129,6 +129,19 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     }
   };
 
+  const handleMarkReceived = async (fromId: string, fromName: string, toId: string, toName: string, amount: number) => {
+    await api.createExpense(
+      token,
+      `Settlement: ${fromName} → ${toName}`,
+      amount,
+      fromId,
+      [],
+      'transfer',
+      toId
+    );
+    loadData();
+  };
+
   const myBalance = selectedMemberId
     ? balances.find(b => b.user_id === selectedMemberId)
     : null;
@@ -497,10 +510,22 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                         );
                       })}
                       {owedBy.map((o, i) => (
-                        <MGroup key={`owed-${i}`} gap="xs">
-                          <Text size="sm" c="green">← Receive from</Text>
-                          <Text size="sm" fw={500}>{o.name}</Text>
-                          <Text size="sm" fw={600} c="green">${o.amount.toFixed(2)}</Text>
+                        <MGroup key={`owed-${i}`} gap="xs" justify="space-between">
+                          <MGroup gap="xs">
+                            <Text size="sm" c="green">← Receive from</Text>
+                            <Text size="sm" fw={500}>{o.name}</Text>
+                            <Text size="sm" fw={600} c="green">${o.amount.toFixed(2)}</Text>
+                          </MGroup>
+                          <Tooltip label={`Record that ${o.name} paid ${balance.user_name}`}>
+                            <Button
+                              size="compact-xs"
+                              variant="light"
+                              color="green"
+                              onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleMarkReceived(o.id, o.name, balance.user_id, balance.user_name, o.amount); }}
+                            >
+                              ✓ Received
+                            </Button>
+                          </Tooltip>
                         </MGroup>
                       ))}
                       {!hasSettlements && (
