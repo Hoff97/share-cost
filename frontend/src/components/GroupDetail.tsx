@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
   Group as MGroup, SegmentedControl, Checkbox, Badge, Card, Pill,
@@ -117,6 +117,78 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const memberOptions = group.members.map((m) => ({ value: m.id, label: m.name }));
 
   const [addEntryOpened, { toggle: toggleAddEntry, close: closeAddEntry }] = useDisclosure(false);
+  const [expandedBalances, setExpandedBalances] = useState<Set<string>>(new Set());
+
+  const toggleBalanceExpanded = (userId: string) => {
+    setExpandedBalances(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  // Calculate minimum transfers to settle all debts
+  interface Settlement {
+    from: string;
+    fromName: string;
+    to: string;
+    toName: string;
+    amount: number;
+  }
+
+  const settlements = useMemo((): Settlement[] => {
+    if (balances.length === 0) return [];
+
+    // Debtors have negative balance (they owe money), creditors have positive (they are owed)
+    const debtors: { id: string; name: string; amount: number }[] = [];
+    const creditors: { id: string; name: string; amount: number }[] = [];
+
+    for (const b of balances) {
+      if (b.balance < -0.005) {
+        debtors.push({ id: b.user_id, name: b.user_name, amount: Math.abs(b.balance) });
+      } else if (b.balance > 0.005) {
+        creditors.push({ id: b.user_id, name: b.user_name, amount: b.balance });
+      }
+    }
+
+    // Sort both descending by amount for greedy matching
+    debtors.sort((a, b) => b.amount - a.amount);
+    creditors.sort((a, b) => b.amount - a.amount);
+
+    const result: Settlement[] = [];
+    let di = 0, ci = 0;
+
+    while (di < debtors.length && ci < creditors.length) {
+      const transfer = Math.min(debtors[di].amount, creditors[ci].amount);
+      if (transfer > 0.005) {
+        result.push({
+          from: debtors[di].id,
+          fromName: debtors[di].name,
+          to: creditors[ci].id,
+          toName: creditors[ci].name,
+          amount: Math.round(transfer * 100) / 100,
+        });
+      }
+      debtors[di].amount -= transfer;
+      creditors[ci].amount -= transfer;
+      if (debtors[di].amount < 0.005) di++;
+      if (creditors[ci].amount < 0.005) ci++;
+    }
+
+    return result;
+  }, [balances]);
+
+  // Get settlements relevant to a specific member
+  const getSettlementsForMember = (userId: string) => {
+    const owes: { name: string; amount: number }[] = [];
+    const owedBy: { name: string; amount: number }[] = [];
+    for (const s of settlements) {
+      if (s.from === userId) owes.push({ name: s.toName, amount: s.amount });
+      if (s.to === userId) owedBy.push({ name: s.fromName, amount: s.amount });
+    }
+    return { owes, owedBy };
+  };
 
   return (
     <Stack gap="lg">
@@ -316,31 +388,77 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
         {/* Balances Tab */}
         <Tabs.Panel value="balances" pt="md">
           <Stack gap="xs">
-            {balances.map((balance) => (
-              <Card
-                key={balance.user_id}
-                padding="sm"
-                radius="md"
-                withBorder
-                style={balance.user_id === selectedMemberId ? {
-                  borderColor: 'var(--mantine-color-blue-5)',
-                  borderWidth: 2,
-                  background: 'var(--mantine-color-blue-0)',
-                } : undefined}
-              >
-                <MGroup justify="space-between">
-                  <Text fw={600}>
-                    {balance.user_name}
-                    {balance.user_id === selectedMemberId && (
-                      <Text component="span" c="blue" fw={500}> (you)</Text>
-                    )}
-                  </Text>
-                  <Text fw={700} size="lg" c={balance.balance >= 0 ? 'green' : 'red'}>
-                    {balance.balance >= 0 ? '+' : ''}${balance.balance.toFixed(2)}
-                  </Text>
-                </MGroup>
-              </Card>
-            ))}
+            {settlements.length > 0 && (
+              <Paper p="sm" radius="md" bg="gray.0" mb="xs">
+                <Text size="sm" c="dimmed" ta="center">
+                  {settlements.length} transfer{settlements.length !== 1 ? 's' : ''} needed to settle all debts
+                </Text>
+              </Paper>
+            )}
+            {balances.map((balance) => {
+              const isExpanded = expandedBalances.has(balance.user_id);
+              const { owes, owedBy } = getSettlementsForMember(balance.user_id);
+              const hasSettlements = owes.length > 0 || owedBy.length > 0;
+
+              return (
+                <Card
+                  key={balance.user_id}
+                  padding="sm"
+                  radius="md"
+                  withBorder
+                  style={{
+                    cursor: hasSettlements ? 'pointer' : undefined,
+                    ...(balance.user_id === selectedMemberId ? {
+                      borderColor: 'var(--mantine-color-blue-5)',
+                      borderWidth: 2,
+                      background: 'var(--mantine-color-blue-0)',
+                    } : {}),
+                  }}
+                  onClick={() => hasSettlements && toggleBalanceExpanded(balance.user_id)}
+                >
+                  <MGroup justify="space-between">
+                    <MGroup gap="xs">
+                      {hasSettlements && (
+                        <Text size="sm" c="dimmed" style={{ transition: 'transform 200ms', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                          ▾
+                        </Text>
+                      )}
+                      <Text fw={600}>
+                        {balance.user_name}
+                        {balance.user_id === selectedMemberId && (
+                          <Text component="span" c="blue" fw={500}> (you)</Text>
+                        )}
+                      </Text>
+                    </MGroup>
+                    <Text fw={700} size="lg" c={balance.balance >= 0 ? 'green' : 'red'}>
+                      {balance.balance >= 0 ? '+' : ''}${balance.balance.toFixed(2)}
+                    </Text>
+                  </MGroup>
+                  <Collapse in={isExpanded}>
+                    <Divider my="xs" />
+                    <Stack gap={4}>
+                      {owes.map((o, i) => (
+                        <MGroup key={`owe-${i}`} gap="xs">
+                          <Text size="sm" c="red">→ Pay</Text>
+                          <Text size="sm" fw={500}>{o.name}</Text>
+                          <Text size="sm" fw={600} c="red">${o.amount.toFixed(2)}</Text>
+                        </MGroup>
+                      ))}
+                      {owedBy.map((o, i) => (
+                        <MGroup key={`owed-${i}`} gap="xs">
+                          <Text size="sm" c="green">← Receive from</Text>
+                          <Text size="sm" fw={500}>{o.name}</Text>
+                          <Text size="sm" fw={600} c="green">${o.amount.toFixed(2)}</Text>
+                        </MGroup>
+                      ))}
+                      {!hasSettlements && (
+                        <Text size="sm" c="dimmed">All settled up! 🎉</Text>
+                      )}
+                    </Stack>
+                  </Collapse>
+                </Card>
+              );
+            })}
           </Stack>
         </Tabs.Panel>
 
