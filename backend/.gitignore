@@ -1,0 +1,24 @@
+# Rust build artifacts
+/target/
+debug/
+release/
+
+# Cargo lock file (optional - include if building a binary)
+# Cargo.lock
+
+# Editor directories
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+
+# Rocket logs
+*.log
