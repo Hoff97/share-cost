@@ -1,0 +1,6 @@
+# Dev-only: exposes postgres on host for local backend development
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up postgres
+services:
+  postgres:
+    ports:
+      - "5433:5432"
