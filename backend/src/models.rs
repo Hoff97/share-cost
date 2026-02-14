@@ -116,6 +116,17 @@ pub struct CreateExpenseRequest {
     pub transfer_to: Option<Uuid>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateExpenseRequest {
+    pub description: String,
+    pub amount: f64,
+    pub paid_by: Uuid,
+    pub split_between: Vec<Uuid>,
+    #[serde(default = "default_expense_type")]
+    pub expense_type: String,
+    pub transfer_to: Option<Uuid>,
+}
+
 // Response DTOs
 #[derive(Debug, Serialize)]
 pub struct GroupCreatedResponse {

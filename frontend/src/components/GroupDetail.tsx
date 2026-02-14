@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
   Group as MGroup, SegmentedControl, Checkbox, Badge, Card,
-  Divider, CopyButton, Tooltip, Collapse, Tabs, Anchor,
+  Divider, CopyButton, Tooltip, Collapse, Tabs, Anchor, ActionIcon,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import * as api from '../api';
@@ -28,6 +28,13 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [editingPayment, setEditingPayment] = useState<string | null>(null);
   const [editPaypal, setEditPaypal] = useState('');
   const [editIban, setEditIban] = useState('');
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editDescription, setEditDescription] = useState('');
+  const [editAmount, setEditAmount] = useState<number | string>('');
+  const [editPaidBy, setEditPaidBy] = useState<string | null>(null);
+  const [editSplitBetween, setEditSplitBetween] = useState<string[]>([]);
+  const [editExpenseType, setEditExpenseType] = useState('expense');
+  const [editTransferTo, setEditTransferTo] = useState<string | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(() => {
     const stored = getStoredGroup(group.id);
     return stored?.selectedMemberId ?? null;
@@ -140,6 +147,52 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       toId
     );
     loadData();
+  };
+
+  const handleStartEditExpense = (expense: Expense) => {
+    setEditingExpenseId(expense.id);
+    setEditDescription(expense.description);
+    setEditAmount(expense.amount);
+    setEditPaidBy(expense.paid_by);
+    setEditSplitBetween(expense.split_between);
+    setEditExpenseType(expense.expense_type);
+    setEditTransferTo(expense.transfer_to);
+  };
+
+  const handleCancelEditExpense = () => {
+    setEditingExpenseId(null);
+  };
+
+  const handleSaveExpense = async () => {
+    if (!editingExpenseId || !editDescription || !editAmount || !editPaidBy) return;
+    if (editExpenseType === 'transfer' && !editTransferTo) return;
+    if (editExpenseType !== 'transfer' && editSplitBetween.length === 0) return;
+
+    await api.updateExpense(
+      token,
+      editingExpenseId,
+      editDescription,
+      typeof editAmount === 'string' ? parseFloat(editAmount) : editAmount,
+      editPaidBy,
+      editSplitBetween,
+      editExpenseType,
+      editExpenseType === 'transfer' ? (editTransferTo ?? undefined) : undefined
+    );
+    setEditingExpenseId(null);
+    loadData();
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    await api.deleteExpense(token, expenseId);
+    loadData();
+  };
+
+  const toggleEditSplitMember = (memberId: string) => {
+    setEditSplitBetween((prev) =>
+      prev.includes(memberId)
+        ? prev.filter((id) => id !== memberId)
+        : [...prev, memberId]
+    );
   };
 
   const myBalance = selectedMemberId
@@ -388,29 +441,108 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                       : 'var(--mantine-color-blue-5)',
                   }}
                 >
-                  <MGroup justify="space-between" align="center" mb={4}>
-                    <MGroup gap="xs">
-                      {expense.expense_type === 'transfer' && (
-                        <Badge size="sm" color="green" variant="light">💸 Transfer</Badge>
+                  {editingExpenseId === expense.id ? (
+                    /* Inline edit form */
+                    <Stack gap="sm">
+                      <SegmentedControl
+                        fullWidth
+                        value={editExpenseType}
+                        onChange={(val) => {
+                          setEditExpenseType(val);
+                          if (val === 'transfer') setEditSplitBetween([]);
+                          else setEditTransferTo(null);
+                        }}
+                        data={[
+                          { label: '💳 Expense', value: 'expense' },
+                          { label: '💸 Transfer', value: 'transfer' },
+                          { label: '💰 Income', value: 'income' },
+                        ]}
+                      />
+                      <TextInput
+                        placeholder="Description"
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                      />
+                      <NumberInput
+                        placeholder="Amount"
+                        min={0}
+                        step={0.01}
+                        decimalScale={2}
+                        value={editAmount}
+                        onChange={setEditAmount}
+                        leftSection="$"
+                      />
+                      <Select
+                        placeholder={editExpenseType === 'transfer' ? 'From who?' : editExpenseType === 'income' ? 'Received by?' : 'Who paid?'}
+                        data={memberOptions}
+                        value={editPaidBy}
+                        onChange={setEditPaidBy}
+                        clearable
+                      />
+                      {editExpenseType === 'transfer' ? (
+                        <Select
+                          placeholder="To who?"
+                          data={memberOptions.filter(m => m.value !== editPaidBy)}
+                          value={editTransferTo}
+                          onChange={setEditTransferTo}
+                          clearable
+                        />
+                      ) : (
+                        <div>
+                          <Text size="sm" fw={500} mb={4}>Split between:</Text>
+                          <Stack gap={4}>
+                            {group.members.map((member) => (
+                              <Checkbox
+                                key={member.id}
+                                label={member.name}
+                                checked={editSplitBetween.includes(member.id)}
+                                onChange={() => toggleEditSplitMember(member.id)}
+                              />
+                            ))}
+                          </Stack>
+                        </div>
                       )}
-                      {expense.expense_type === 'income' && (
-                        <Badge size="sm" color="yellow" variant="light">💰 Income</Badge>
-                      )}
-                      <Text fw={600}>{expense.description}</Text>
-                    </MGroup>
-                    <Text fw={700} c="blue" size="lg">${expense.amount.toFixed(2)}</Text>
-                  </MGroup>
-                  <Text size="sm" c="dimmed">
-                    {expense.expense_type === 'transfer' ? (
-                      <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</>
-                    ) : (
-                      <>
-                        {expense.expense_type === 'income' ? 'Received by' : 'Paid by'}: {getMemberName(expense.paid_by)}
-                        {' · '}
-                        Split: {expense.split_between.map(getMemberName).join(', ')}
-                      </>
-                    )}
-                  </Text>
+                      <MGroup gap="xs">
+                        <Button size="compact-sm" onClick={handleSaveExpense}>Save</Button>
+                        <Button size="compact-sm" variant="subtle" color="gray" onClick={handleCancelEditExpense}>Cancel</Button>
+                      </MGroup>
+                    </Stack>
+                  ) : (
+                    /* Display mode */
+                    <>
+                      <MGroup justify="space-between" align="center" mb={4}>
+                        <MGroup gap="xs">
+                          {expense.expense_type === 'transfer' && (
+                            <Badge size="sm" color="green" variant="light">💸 Transfer</Badge>
+                          )}
+                          {expense.expense_type === 'income' && (
+                            <Badge size="sm" color="yellow" variant="light">💰 Income</Badge>
+                          )}
+                          <Text fw={600}>{expense.description}</Text>
+                        </MGroup>
+                        <MGroup gap={4}>
+                          <Text fw={700} c="blue" size="lg">${expense.amount.toFixed(2)}</Text>
+                          <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => handleStartEditExpense(expense)}>
+                            <Text size="xs">✏️</Text>
+                          </ActionIcon>
+                          <ActionIcon size="sm" variant="subtle" color="red" onClick={() => handleDeleteExpense(expense.id)}>
+                            <Text size="xs">🗑️</Text>
+                          </ActionIcon>
+                        </MGroup>
+                      </MGroup>
+                      <Text size="sm" c="dimmed">
+                        {expense.expense_type === 'transfer' ? (
+                          <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</>
+                        ) : (
+                          <>
+                            {expense.expense_type === 'income' ? 'Received by' : 'Paid by'}: {getMemberName(expense.paid_by)}
+                            {' · '}
+                            Split: {expense.split_between.map(getMemberName).join(', ')}
+                          </>
+                        )}
+                      </Text>
+                    </>
+                  )}
                 </Card>
               ))
             )}

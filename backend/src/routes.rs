@@ -352,6 +352,139 @@ async fn create_expense(
     Ok(Json(expense))
 }
 
+// Update expense - requires valid JWT
+#[put("/groups/current/expenses/<expense_id>", data = "<request>")]
+async fn update_expense(
+    auth: GroupAuth,
+    expense_id: &str,
+    request: Json<UpdateExpenseRequest>,
+) -> Result<Json<Expense>, Status> {
+    let pool = db::get_pool();
+    let expense_uuid = Uuid::parse_str(expense_id).map_err(|_| Status::BadRequest)?;
+
+    // Verify expense belongs to this group
+    let _existing: ExpenseRow = sqlx::query_as(
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at 
+         FROM expenses WHERE id = $1 AND group_id = $2"
+    )
+    .bind(expense_uuid)
+    .bind(auth.group_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Failed to fetch expense: {}", e);
+        Status::InternalServerError
+    })?
+    .ok_or(Status::NotFound)?;
+
+    let amount = BigDecimal::try_from(request.amount).map_err(|_| Status::BadRequest)?;
+
+    // Update expense
+    sqlx::query(
+        "UPDATE expenses SET description = $1, amount = $2, paid_by = $3, expense_type = $4, transfer_to = $5
+         WHERE id = $6"
+    )
+    .bind(&request.description)
+    .bind(&amount)
+    .bind(request.paid_by)
+    .bind(&request.expense_type)
+    .bind(request.transfer_to)
+    .bind(expense_uuid)
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Failed to update expense: {}", e);
+        Status::InternalServerError
+    })?;
+
+    // Delete old splits and re-insert
+    sqlx::query("DELETE FROM expense_splits WHERE expense_id = $1")
+        .bind(expense_uuid)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to delete expense splits: {}", e);
+            Status::InternalServerError
+        })?;
+
+    if request.expense_type != "transfer" {
+        for member_id in &request.split_between {
+            sqlx::query(
+                "INSERT INTO expense_splits (expense_id, member_id) VALUES ($1, $2)"
+            )
+            .bind(expense_uuid)
+            .bind(member_id)
+            .execute(pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to create expense split: {}", e);
+                Status::InternalServerError
+            })?;
+        }
+    }
+
+    let expense = Expense {
+        id: expense_uuid,
+        group_id: auth.group_id,
+        description: request.description.clone(),
+        amount: request.amount,
+        paid_by: request.paid_by,
+        split_between: request.split_between.clone(),
+        expense_type: request.expense_type.clone(),
+        transfer_to: request.transfer_to,
+        created_at: _existing.created_at,
+    };
+
+    Ok(Json(expense))
+}
+
+// Delete expense - requires valid JWT
+#[delete("/groups/current/expenses/<expense_id>")]
+async fn delete_expense(
+    auth: GroupAuth,
+    expense_id: &str,
+) -> Result<Status, Status> {
+    let pool = db::get_pool();
+    let expense_uuid = Uuid::parse_str(expense_id).map_err(|_| Status::BadRequest)?;
+
+    // Verify expense belongs to this group
+    let _existing: ExpenseRow = sqlx::query_as(
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at 
+         FROM expenses WHERE id = $1 AND group_id = $2"
+    )
+    .bind(expense_uuid)
+    .bind(auth.group_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| {
+        eprintln!("Failed to fetch expense: {}", e);
+        Status::InternalServerError
+    })?
+    .ok_or(Status::NotFound)?;
+
+    // Delete splits first
+    sqlx::query("DELETE FROM expense_splits WHERE expense_id = $1")
+        .bind(expense_uuid)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to delete expense splits: {}", e);
+            Status::InternalServerError
+        })?;
+
+    // Delete expense
+    sqlx::query("DELETE FROM expenses WHERE id = $1")
+        .bind(expense_uuid)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to delete expense: {}", e);
+            Status::InternalServerError
+        })?;
+
+    Ok(Status::NoContent)
+}
+
 // Get balances - requires valid JWT
 #[get("/groups/current/balances")]
 async fn get_balances(
@@ -488,6 +621,8 @@ pub fn get_routes() -> Vec<Route> {
         update_member_payment,
         get_expenses,
         create_expense,
+        update_expense,
+        delete_expense,
         get_balances
     ]
 }

@@ -124,3 +124,40 @@ export const updateMemberPayment = async (
   });
   return res.json();
 };
+
+// Update expense
+export const updateExpense = async (
+  token: string,
+  expenseId: string,
+  description: string,
+  amount: number,
+  paidBy: string,
+  splitBetween: string[],
+  expenseType: string = 'expense',
+  transferTo?: string
+): Promise<Expense> => {
+  const res = await fetch(`${API_BASE}/groups/current/expenses/${expenseId}`, {
+    method: 'PUT',
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      description,
+      amount,
+      paid_by: paidBy,
+      split_between: splitBetween,
+      expense_type: expenseType,
+      transfer_to: transferTo || null,
+    }),
+  });
+  return res.json();
+};
+
+// Delete expense
+export const deleteExpense = async (
+  token: string,
+  expenseId: string
+): Promise<void> => {
+  await fetch(`${API_BASE}/groups/current/expenses/${expenseId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
+};
