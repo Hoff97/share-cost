@@ -243,6 +243,75 @@ form button {
   border-radius: 8px;
 }
 
+.expense-item.transfer {
+  border-left-color: #27ae60;
+}
+
+.expense-item.income {
+  border-left-color: #f39c12;
+}
+
+/* Expense type selector */
+.expense-type-selector {
+  display: flex;
+  gap: 0;
+  margin-bottom: 15px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #ddd;
+}
+
+.type-btn {
+  flex: 1;
+  padding: 10px;
+  background: #f8f9fa;
+  border: none;
+  border-radius: 0;
+  color: #666;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.type-btn:hover {
+  background: #e9ecef;
+  color: #333;
+}
+
+.type-btn.active {
+  background: #3498db;
+  color: white;
+}
+
+.type-btn.active:hover {
+  background: #2980b9;
+}
+
+/* Type badges in expense list */
+.expense-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.type-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.type-badge.transfer {
+  background: #d4edda;
+  color: #155724;
+}
+
+.type-badge.income {
+  background: #fff3cd;
+  color: #856404;
+}
+
 .expense-header {
   display: flex;
   justify-content: space-between;

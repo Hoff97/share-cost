@@ -24,6 +24,8 @@ export interface Expense {
   amount: number;
   paid_by: string;
   split_between: string[];
+  expense_type: string;
+  transfer_to: string | null;
   created_at: string;
 }
 
@@ -79,7 +81,9 @@ export const createExpense = async (
   description: string,
   amount: number,
   paidBy: string,
-  splitBetween: string[]
+  splitBetween: string[],
+  expenseType: string = 'expense',
+  transferTo?: string
 ): Promise<Expense> => {
   const res = await fetch(`${API_BASE}/groups/current/expenses`, {
     method: 'POST',
@@ -89,6 +93,8 @@ export const createExpense = async (
       amount,
       paid_by: paidBy,
       split_between: splitBetween,
+      expense_type: expenseType,
+      transfer_to: transferTo || null,
     }),
   });
   return res.json();

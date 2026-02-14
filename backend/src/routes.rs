@@ -194,7 +194,7 @@ async fn get_expenses(
     
     // Get all expenses for this group
     let expense_rows: Vec<ExpenseRow> = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at 
          FROM expenses WHERE group_id = $1 ORDER BY created_at DESC"
     )
     .bind(auth.group_id)
@@ -226,6 +226,8 @@ async fn get_expenses(
             amount: row.amount.to_f64().unwrap_or(0.0),
             paid_by: row.paid_by,
             split_between: splits.into_iter().map(|s| s.member_id).collect(),
+            expense_type: row.expense_type,
+            transfer_to: row.transfer_to,
             created_at: row.created_at,
         });
     }
@@ -248,14 +250,16 @@ async fn create_expense(
 
     // Insert expense
     sqlx::query(
-        "INSERT INTO expenses (id, group_id, description, amount, paid_by, created_at) 
-         VALUES ($1, $2, $3, $4, $5, $6)"
+        "INSERT INTO expenses (id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
     )
     .bind(expense_id)
     .bind(auth.group_id)
     .bind(&request.description)
     .bind(&amount)
     .bind(request.paid_by)
+    .bind(&request.expense_type)
+    .bind(request.transfer_to)
     .bind(created_at)
     .execute(pool)
     .await
@@ -264,19 +268,21 @@ async fn create_expense(
         Status::InternalServerError
     })?;
 
-    // Insert expense splits
-    for member_id in &request.split_between {
-        sqlx::query(
-            "INSERT INTO expense_splits (expense_id, member_id) VALUES ($1, $2)"
-        )
-        .bind(expense_id)
-        .bind(member_id)
-        .execute(pool)
-        .await
-        .map_err(|e| {
-            eprintln!("Failed to create expense split: {}", e);
-            Status::InternalServerError
-        })?;
+    // Insert expense splits (not needed for transfers)
+    if request.expense_type != "transfer" {
+        for member_id in &request.split_between {
+            sqlx::query(
+                "INSERT INTO expense_splits (expense_id, member_id) VALUES ($1, $2)"
+            )
+            .bind(expense_id)
+            .bind(member_id)
+            .execute(pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to create expense split: {}", e);
+                Status::InternalServerError
+            })?;
+        }
     }
 
     let expense = Expense {
@@ -286,6 +292,8 @@ async fn create_expense(
         amount: request.amount,
         paid_by: request.paid_by,
         split_between: request.split_between.clone(),
+        expense_type: request.expense_type.clone(),
+        transfer_to: request.transfer_to,
         created_at,
     };
 
@@ -313,7 +321,7 @@ async fn get_balances(
 
     // Get all expenses with splits
     let expense_rows: Vec<ExpenseRow> = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, created_at 
          FROM expenses WHERE group_id = $1"
     )
     .bind(auth.group_id)
@@ -339,33 +347,79 @@ async fn get_balances(
         let amount = expense_row.amount.to_f64().unwrap_or(0.0);
         let paid_by = expense_row.paid_by;
 
-        // Get splits for this expense
-        let splits: Vec<ExpenseSplitMemberRow> = sqlx::query_as(
-            "SELECT member_id FROM expense_splits WHERE expense_id = $1"
-        )
-        .bind(expense_row.id)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| {
-            eprintln!("Failed to fetch expense splits: {}", e);
-            Status::InternalServerError
-        })?;
+        match expense_row.expense_type.as_str() {
+            "transfer" => {
+                // Direct transfer: sender is owed money back, receiver owes
+                if let Some(sender) = balances.iter_mut().find(|b| b.user_id == paid_by) {
+                    sender.balance += amount;
+                }
+                if let Some(to_id) = expense_row.transfer_to {
+                    if let Some(receiver) = balances.iter_mut().find(|b| b.user_id == to_id) {
+                        receiver.balance -= amount;
+                    }
+                }
+            }
+            "income" => {
+                // External income: receiver holds money, split members are owed their share
+                let splits: Vec<ExpenseSplitMemberRow> = sqlx::query_as(
+                    "SELECT member_id FROM expense_splits WHERE expense_id = $1"
+                )
+                .bind(expense_row.id)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| {
+                    eprintln!("Failed to fetch expense splits: {}", e);
+                    Status::InternalServerError
+                })?;
 
-        let split_count = splits.len() as f64;
-        if split_count == 0.0 {
-            continue;
-        }
-        let split_amount = amount / split_count;
+                let split_count = splits.len() as f64;
+                if split_count == 0.0 {
+                    continue;
+                }
+                let split_amount = amount / split_count;
 
-        // The payer gets credit
-        if let Some(payer) = balances.iter_mut().find(|b| b.user_id == paid_by) {
-            payer.balance += amount;
-        }
+                // The receiver holds the money (owes distribution)
+                if let Some(receiver) = balances.iter_mut().find(|b| b.user_id == paid_by) {
+                    receiver.balance -= amount;
+                }
 
-        // Each person in the split owes
-        for split in splits {
-            if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id) {
-                member.balance -= split_amount;
+                // Each split member is owed their share
+                for split in splits {
+                    if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id) {
+                        member.balance += split_amount;
+                    }
+                }
+            }
+            _ => {
+                // Regular expense: payer gets credit, split members owe
+                let splits: Vec<ExpenseSplitMemberRow> = sqlx::query_as(
+                    "SELECT member_id FROM expense_splits WHERE expense_id = $1"
+                )
+                .bind(expense_row.id)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| {
+                    eprintln!("Failed to fetch expense splits: {}", e);
+                    Status::InternalServerError
+                })?;
+
+                let split_count = splits.len() as f64;
+                if split_count == 0.0 {
+                    continue;
+                }
+                let split_amount = amount / split_count;
+
+                // The payer gets credit
+                if let Some(payer) = balances.iter_mut().find(|b| b.user_id == paid_by) {
+                    payer.balance += amount;
+                }
+
+                // Each person in the split owes
+                for split in splits {
+                    if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id) {
+                        member.balance -= split_amount;
+                    }
+                }
             }
         }
     }

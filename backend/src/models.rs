@@ -27,6 +27,8 @@ pub struct ExpenseRow {
     pub description: String,
     pub amount: BigDecimal,
     pub paid_by: Uuid,
+    pub expense_type: String,
+    pub transfer_to: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -65,6 +67,8 @@ pub struct Expense {
     pub amount: f64,
     pub paid_by: Uuid,
     pub split_between: Vec<Uuid>,
+    pub expense_type: String,
+    pub transfer_to: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -87,12 +91,19 @@ pub struct AddMemberRequest {
     pub name: String,
 }
 
+fn default_expense_type() -> String {
+    "expense".to_string()
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateExpenseRequest {
     pub description: String,
     pub amount: f64,
     pub paid_by: Uuid,
     pub split_between: Vec<Uuid>,
+    #[serde(default = "default_expense_type")]
+    pub expense_type: String,
+    pub transfer_to: Option<Uuid>,
 }
 
 // Response DTOs

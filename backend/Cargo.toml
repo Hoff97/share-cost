@@ -16,3 +16,5 @@ jsonwebtoken = "9"
 dotenvy = "0.15"
 bigdecimal = "0.4"
 once_cell = "1.19"
+refinery = { version = "0.9", features = ["tokio-postgres"] }
+tokio-postgres = "0.7"

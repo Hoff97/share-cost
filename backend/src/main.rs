@@ -34,11 +34,11 @@ fn rocket() -> _ {
             let database_url = std::env::var("DATABASE_URL")
                 .expect("DATABASE_URL must be set");
             
+            db::run_migrations(&database_url).await
+                .expect("Failed to run migrations");
+
             db::init_pool(&database_url).await
                 .expect("Failed to initialize database pool");
-            
-            db::run_migrations(db::get_pool()).await
-                .expect("Failed to run migrations");
             
             Ok(rocket)
         }))

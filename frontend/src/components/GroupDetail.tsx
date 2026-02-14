@@ -16,6 +16,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [amount, setAmount] = useState('');
   const [paidBy, setPaidBy] = useState('');
   const [splitBetween, setSplitBetween] = useState<string[]>([]);
+  const [expenseType, setExpenseType] = useState<'expense' | 'transfer' | 'income'>('expense');
+  const [transferTo, setTransferTo] = useState('');
   const [newMemberName, setNewMemberName] = useState('');
   const [showShareLink, setShowShareLink] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | undefined>(() => {
@@ -46,20 +48,26 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || !amount || !paidBy || splitBetween.length === 0) return;
+    if (!description || !amount || !paidBy) return;
+    if (expenseType === 'transfer' && !transferTo) return;
+    if (expenseType !== 'transfer' && splitBetween.length === 0) return;
 
     await api.createExpense(
       token,
       description,
       parseFloat(amount),
       paidBy,
-      splitBetween
+      splitBetween,
+      expenseType,
+      expenseType === 'transfer' ? transferTo : undefined
     );
 
     setDescription('');
     setAmount('');
     setPaidBy('');
     setSplitBetween([]);
+    setExpenseType('expense');
+    setTransferTo('');
     loadData();
   };
 
@@ -155,8 +163,13 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       </div>
 
       <section className="add-expense-section">
-        <h3>Add Expense</h3>
+        <h3>Add Entry</h3>
         <form onSubmit={handleAddExpense}>
+          <div className="expense-type-selector">
+            <button type="button" className={`type-btn ${expenseType === 'expense' ? 'active' : ''}`} onClick={() => { setExpenseType('expense'); setTransferTo(''); }}>💳 Expense</button>
+            <button type="button" className={`type-btn ${expenseType === 'transfer' ? 'active' : ''}`} onClick={() => { setExpenseType('transfer'); setSplitBetween([]); }}>💸 Transfer</button>
+            <button type="button" className={`type-btn ${expenseType === 'income' ? 'active' : ''}`} onClick={() => { setExpenseType('income'); setTransferTo(''); }}>💰 Income</button>
+          </div>
           <input
             type="text"
             placeholder="Description"
@@ -171,27 +184,42 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
             onChange={(e) => setAmount(e.target.value)}
           />
           <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
-            <option value="">Who paid?</option>
+            <option value="">
+              {expenseType === 'transfer' ? 'From who?' : expenseType === 'income' ? 'Received by?' : 'Who paid?'}
+            </option>
             {group.members.map((member) => (
               <option key={member.id} value={member.id}>
                 {member.name}
               </option>
             ))}
           </select>
-          <div className="split-selection">
-            <label>Split between:</label>
-            {group.members.map((member) => (
-              <label key={member.id} className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={splitBetween.includes(member.id)}
-                  onChange={() => toggleSplitMember(member.id)}
-                />
-                {member.name}
-              </label>
-            ))}
-          </div>
-          <button type="submit">Add Expense</button>
+          {expenseType === 'transfer' ? (
+            <select value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
+              <option value="">To who?</option>
+              {group.members.filter(m => m.id !== paidBy).map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="split-selection">
+              <label>Split between:</label>
+              {group.members.map((member) => (
+                <label key={member.id} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={splitBetween.includes(member.id)}
+                    onChange={() => toggleSplitMember(member.id)}
+                  />
+                  {member.name}
+                </label>
+              ))}
+            </div>
+          )}
+          <button type="submit">
+            {expenseType === 'transfer' ? 'Add Transfer' : expenseType === 'income' ? 'Add Income' : 'Add Expense'}
+          </button>
         </form>
       </section>
 
@@ -202,16 +230,26 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
             <p className="no-expenses">No expenses yet. Add one above!</p>
           ) : (
             expenses.map((expense) => (
-              <div key={expense.id} className="expense-item">
+              <div key={expense.id} className={`expense-item ${expense.expense_type || 'expense'}`}>
                 <div className="expense-header">
-                  <span className="description">{expense.description}</span>
+                  <div className="expense-title">
+                    {expense.expense_type === 'transfer' && <span className="type-badge transfer">💸 Transfer</span>}
+                    {expense.expense_type === 'income' && <span className="type-badge income">💰 Income</span>}
+                    <span className="description">{expense.description}</span>
+                  </div>
                   <span className="amount">${expense.amount.toFixed(2)}</span>
                 </div>
                 <div className="expense-details">
-                  <span>Paid by: {getMemberName(expense.paid_by)}</span>
-                  <span>
-                    Split: {expense.split_between.map(getMemberName).join(', ')}
-                  </span>
+                  {expense.expense_type === 'transfer' ? (
+                    <span>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</span>
+                  ) : (
+                    <>
+                      <span>{expense.expense_type === 'income' ? 'Received by' : 'Paid by'}: {getMemberName(expense.paid_by)}</span>
+                      <span>
+                        Split: {expense.split_between.map(getMemberName).join(', ')}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             ))
