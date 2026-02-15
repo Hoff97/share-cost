@@ -5,6 +5,8 @@ import {
   Divider, CopyButton, Tooltip, Collapse, Tabs, Anchor, ActionIcon,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { DatePickerInput } from '@mantine/dates';
+import 'dayjs/locale/de';
 import * as api from '../api';
 import type { Group, Expense, Balance } from '../api';
 import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
@@ -15,15 +17,22 @@ interface GroupDetailProps {
   onGroupUpdated: () => void;
 }
 
-// Convert YYYY-MM-DD → DD.MM.YYYY
+// Convert YYYY-MM-DD → DD.MM.YYYY for display
 const formatDate = (iso: string) => {
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y}`;
 };
-// Convert DD.MM.YYYY → YYYY-MM-DD
-const toIsoDate = (display: string) => {
-  const [d, m, y] = display.split('.');
-  return `${y}-${m}-${d}`;
+// Date object → YYYY-MM-DD string for API
+const dateToIso = (d: Date) => {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+// YYYY-MM-DD string → Date object
+const isoToDate = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
 };
 
 // Currency helpers
@@ -55,7 +64,6 @@ const fetchRate = async (from: string, to: string, date: string): Promise<number
 };
 
 export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) {
-  const todayStr = () => formatDate(new Date().toISOString().slice(0, 10));
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [description, setDescription] = useState('');
@@ -64,7 +72,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [splitBetween, setSplitBetween] = useState<string[]>(() => group.members.map(m => m.id));
   const [expenseType, setExpenseType] = useState('expense');
   const [transferTo, setTransferTo] = useState<string | null>(null);
-  const [expenseDate, setExpenseDate] = useState(todayStr);
+  const [expenseDate, setExpenseDate] = useState<Date | null>(new Date());
   const [newMemberName, setNewMemberName] = useState('');
   const [editingPayment, setEditingPayment] = useState<string | null>(null);
   const [editPaypal, setEditPaypal] = useState('');
@@ -76,7 +84,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [editSplitBetween, setEditSplitBetween] = useState<string[]>([]);
   const [editExpenseType, setEditExpenseType] = useState('expense');
   const [editTransferTo, setEditTransferTo] = useState<string | null>(null);
-  const [editExpenseDate, setEditExpenseDate] = useState('');
+  const [editExpenseDate, setEditExpenseDate] = useState<Date | null>(null);
   const [expenseCurrency, setExpenseCurrency] = useState(group.currency);
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [editExpenseCurrency, setEditExpenseCurrency] = useState('');
@@ -109,8 +117,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   // Auto-fetch exchange rate for add form
   useEffect(() => {
     if (expenseCurrency === group.currency) { setExchangeRate(1); return; }
-    const iso = toIsoDate(expenseDate);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    if (!expenseDate) return;
+    const iso = dateToIso(expenseDate);
     let cancelled = false;
     fetchRate(expenseCurrency, group.currency, iso).then(rate => {
       if (!cancelled && rate !== null) setExchangeRate(rate);
@@ -121,8 +129,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   // Auto-fetch exchange rate for edit form
   useEffect(() => {
     if (!editingExpenseId || editExpenseCurrency === group.currency) return;
-    const iso = toIsoDate(editExpenseDate);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    if (!editExpenseDate) return;
+    const iso = dateToIso(editExpenseDate);
     let cancelled = false;
     fetchRate(editExpenseCurrency, group.currency, iso).then(rate => {
       if (!cancelled && rate !== null) setEditExchangeRate(rate);
@@ -144,7 +152,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       splitBetween,
       expenseType,
       expenseType === 'transfer' ? (transferTo ?? undefined) : undefined,
-      toIsoDate(expenseDate),
+      expenseDate ? dateToIso(expenseDate) : dateToIso(new Date()),
       expenseCurrency,
       exchangeRate
     );
@@ -155,7 +163,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setSplitBetween(allMemberIds);
     setExpenseType('expense');
     setTransferTo(null);
-    setExpenseDate(todayStr());
+    setExpenseDate(new Date());
     setExpenseCurrency(group.currency);
     setExchangeRate(1);
     loadData();
@@ -245,7 +253,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setEditSplitBetween(expense.split_between);
     setEditExpenseType(expense.expense_type);
     setEditTransferTo(expense.transfer_to);
-    setEditExpenseDate(formatDate(expense.expense_date));
+    setEditExpenseDate(isoToDate(expense.expense_date));
     setEditExpenseCurrency(expense.currency);
     setEditExchangeRate(expense.exchange_rate);
   };
@@ -268,7 +276,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       editSplitBetween,
       editExpenseType,
       editExpenseType === 'transfer' ? (editTransferTo ?? undefined) : undefined,
-      toIsoDate(editExpenseDate),
+      editExpenseDate ? dateToIso(editExpenseDate) : dateToIso(new Date()),
       editExpenseCurrency,
       editExchangeRate
     );
@@ -669,11 +677,15 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                       </Stack>
                     </div>
                   )}
-                  <TextInput
+                  <DatePickerInput
                     label="Date"
-                    placeholder="DD.MM.YYYY"
+                    placeholder="Pick a date"
                     value={expenseDate}
-                    onChange={(e) => setExpenseDate(e.target.value)}
+                    onChange={setExpenseDate}
+                    locale="de"
+                    valueFormat="DD.MM.YYYY"
+                    clearable
+                    maxDate={new Date()}
                   />
                   <Button type="submit" fullWidth>
                     {expenseType === 'transfer' ? 'Add Transfer' : expenseType === 'income' ? 'Add Income' : 'Add Expense'}
@@ -802,12 +814,16 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                           </Stack>
                         </div>
                       )}
-                      <TextInput
+                      <DatePickerInput
                         label="Date"
-                        placeholder="DD.MM.YYYY"
+                        placeholder="Pick a date"
                         size="xs"
                         value={editExpenseDate}
-                        onChange={(e) => setEditExpenseDate(e.target.value)}
+                        onChange={setEditExpenseDate}
+                        locale="de"
+                        valueFormat="DD.MM.YYYY"
+                        clearable
+                        maxDate={new Date()}
                       />
                       <MGroup gap="xs">
                         <Button size="compact-sm" onClick={handleSaveExpense}>Save</Button>
