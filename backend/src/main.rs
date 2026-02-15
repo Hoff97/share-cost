@@ -45,13 +45,13 @@ fn rocket() -> _ {
         .attach(AdHoc::try_on_ignite("Initialize Database", |rocket| async {
             let database_url = std::env::var("DATABASE_URL")
                 .expect("DATABASE_URL must be set");
-            
+
             db::run_migrations(&database_url).await
                 .expect("Failed to run migrations");
 
             db::init_pool(&database_url).await
                 .expect("Failed to initialize database pool");
-            
+
             Ok(rocket)
         }))
         .mount("/api", routes::get_routes())

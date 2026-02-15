@@ -61,7 +61,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState<number | string>('');
   const [paidBy, setPaidBy] = useState<string | null>(null);
-  const [splitBetween, setSplitBetween] = useState<string[]>([]);
+  const [splitBetween, setSplitBetween] = useState<string[]>(() => group.members.map(m => m.id));
   const [expenseType, setExpenseType] = useState('expense');
   const [transferTo, setTransferTo] = useState<string | null>(null);
   const [expenseDate, setExpenseDate] = useState(todayStr);
@@ -152,7 +152,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setDescription('');
     setAmount('');
     setPaidBy(null);
-    setSplitBetween([]);
+    setSplitBetween(allMemberIds);
     setExpenseType('expense');
     setTransferTo(null);
     setExpenseDate(todayStr());
@@ -304,6 +304,16 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     creditorInTargetId: string | null; myIdInTarget: string | null;
     loading: boolean;
   } | null>(null);
+
+  const allMemberIds = useMemo(() => group.members.map((m) => m.id), [group.members]);
+
+  // When members change (e.g. new member added), include new members in split
+  useEffect(() => {
+    setSplitBetween(prev => {
+      const added = allMemberIds.filter(id => !prev.includes(id));
+      return added.length > 0 ? [...prev, ...added] : prev;
+    });
+  }, [allMemberIds]);
 
   const toggleBalanceExpanded = (userId: string) => {
     setExpandedBalances(prev => {
@@ -563,8 +573,12 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                     value={expenseType}
                     onChange={(val) => {
                       setExpenseType(val);
-                      if (val === 'transfer') setSplitBetween([]);
-                      else setTransferTo(null);
+                      if (val === 'transfer') {
+                        setSplitBetween([]);
+                      } else {
+                        setTransferTo(null);
+                        setSplitBetween(allMemberIds);
+                      }
                     }}
                     data={[
                       { label: '💳 Expense', value: 'expense' },
@@ -634,12 +648,22 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                     <div>
                       <Text size="sm" fw={500} mb={4}>Split between:</Text>
                       <Stack gap={4}>
+                        <Checkbox
+                          label="Everyone"
+                          fw={600}
+                          checked={splitBetween.length === group.members.length}
+                          indeterminate={splitBetween.length > 0 && splitBetween.length < group.members.length}
+                          onChange={() =>
+                            setSplitBetween(splitBetween.length === group.members.length ? [] : allMemberIds)
+                          }
+                        />
                         {group.members.map((member) => (
                           <Checkbox
                             key={member.id}
                             label={member.name}
                             checked={splitBetween.includes(member.id)}
                             onChange={() => toggleSplitMember(member.id)}
+                            ml="md"
                           />
                         ))}
                       </Stack>
@@ -757,12 +781,22 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                         <div>
                           <Text size="sm" fw={500} mb={4}>Split between:</Text>
                           <Stack gap={4}>
+                            <Checkbox
+                              label="Everyone"
+                              fw={600}
+                              checked={editSplitBetween.length === group.members.length}
+                              indeterminate={editSplitBetween.length > 0 && editSplitBetween.length < group.members.length}
+                              onChange={() =>
+                                setEditSplitBetween(editSplitBetween.length === group.members.length ? [] : allMemberIds)
+                              }
+                            />
                             {group.members.map((member) => (
                               <Checkbox
                                 key={member.id}
                                 label={member.name}
                                 checked={editSplitBetween.includes(member.id)}
                                 onChange={() => toggleEditSplitMember(member.id)}
+                                ml="md"
                               />
                             ))}
                           </Stack>
