@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge } from '@mantine/core';
+import { useState, useEffect, useRef } from 'react';
+import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge, CloseButton } from '@mantine/core';
 import * as api from './offlineApi';
 import type { Group } from './offlineApi';
 import { CreateGroup } from './components/CreateGroup';
@@ -34,6 +34,98 @@ function SyncStatus() {
       )}
     </div>
   );
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+const INSTALL_DISMISSED_KEY = 'share-cost-install-dismissed';
+
+function InstallBanner() {
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showIosHint, setShowIosHint] = useState(false);
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(INSTALL_DISMISSED_KEY) === 'true');
+  const promptRef = useRef<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    // Already installed as PWA or dismissed
+    if (window.matchMedia('(display-mode: standalone)').matches) return;
+    if ((navigator as unknown as { standalone?: boolean }).standalone) return;
+
+    // Chrome / Edge / Samsung — capture the install prompt
+    const handler = (e: Event) => {
+      e.preventDefault();
+      promptRef.current = e as BeforeInstallPromptEvent;
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // iOS Safari — no beforeinstallprompt, show manual hint
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isSafari = /safari/i.test(navigator.userAgent) && !/chrome|crios|fxios/i.test(navigator.userAgent);
+    if (isIos || isSafari) {
+      setShowIosHint(true);
+    }
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!promptRef.current) return;
+    await promptRef.current.prompt();
+    const { outcome } = await promptRef.current.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    localStorage.setItem(INSTALL_DISMISSED_KEY, 'true');
+  };
+
+  if (dismissed) return null;
+  // Already in standalone mode
+  if (typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches) return null;
+
+  if (deferredPrompt) {
+    return (
+      <Paper shadow="sm" p="sm" radius="md" withBorder mb="md"
+        style={{ background: 'var(--mantine-color-blue-0)', position: 'relative' }}>
+        <CloseButton size="sm" style={{ position: 'absolute', top: 8, right: 8 }} onClick={handleDismiss} />
+        <MGroup gap="sm" align="center" pr={24}>
+          <Text size="lg">📲</Text>
+          <div style={{ flex: 1 }}>
+            <Text size="sm" fw={600}>Install Share Cost</Text>
+            <Text size="xs" c="dimmed">Add to your home screen for offline access</Text>
+          </div>
+          <Button size="compact-sm" onClick={handleInstall}>Install</Button>
+        </MGroup>
+      </Paper>
+    );
+  }
+
+  if (showIosHint) {
+    return (
+      <Paper shadow="sm" p="sm" radius="md" withBorder mb="md"
+        style={{ background: 'var(--mantine-color-blue-0)', position: 'relative' }}>
+        <CloseButton size="sm" style={{ position: 'absolute', top: 8, right: 8 }} onClick={handleDismiss} />
+        <MGroup gap="sm" align="center" pr={24}>
+          <Text size="lg">📲</Text>
+          <div style={{ flex: 1 }}>
+            <Text size="sm" fw={600}>Install Share Cost</Text>
+            <Text size="xs" c="dimmed">
+              Tap the share button <Text component="span" fw={700}>⬆</Text> then "Add to Home Screen"
+            </Text>
+          </div>
+        </MGroup>
+      </Paper>
+    );
+  }
+
+  return null;
 }
 
 function AppContent() {
@@ -152,6 +244,7 @@ function AppContent() {
         <Title order={1}>💰 Share Cost</Title>
         <Text c="dimmed">Split expenses with friends, no sign-up required</Text>
       </Stack>
+      <InstallBanner />
       {showCreate ? (
         <CreateGroup
           onGroupCreated={handleGroupCreated}
