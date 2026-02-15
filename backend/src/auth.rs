@@ -13,17 +13,22 @@ static JWT_SECRET: Lazy<String> = Lazy::new(|| {
 /// Granular permissions stored in the JWT.
 /// All fields are `Option<bool>` for backward compatibility:
 /// old tokens that lack these fields default to `true` (full access).
+/// Short serde names keep the JWT compact; `alias` accepts old long names.
+fn default_true() -> Option<bool> {
+    Some(true)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Permissions {
-    #[serde(default)]
+    #[serde(default = "default_true", rename = "dg", alias = "can_delete_group", skip_serializing_if = "Option::is_none")]
     pub can_delete_group: Option<bool>,
-    #[serde(default)]
+    #[serde(default = "default_true", rename = "mm", alias = "can_manage_members", skip_serializing_if = "Option::is_none")]
     pub can_manage_members: Option<bool>,
-    #[serde(default)]
+    #[serde(default = "default_true", rename = "up", alias = "can_update_payment", skip_serializing_if = "Option::is_none")]
     pub can_update_payment: Option<bool>,
-    #[serde(default)]
+    #[serde(default = "default_true", rename = "ae", alias = "can_add_expenses", skip_serializing_if = "Option::is_none")]
     pub can_add_expenses: Option<bool>,
-    #[serde(default)]
+    #[serde(default = "default_true", rename = "ee", alias = "can_edit_expenses", skip_serializing_if = "Option::is_none")]
     pub can_edit_expenses: Option<bool>,
 }
 
@@ -76,10 +81,12 @@ impl Permissions {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
+    #[serde(rename = "g", alias = "group_id")]
     pub group_id: Uuid,
+    #[serde(rename = "e", alias = "exp")]
     pub exp: usize,
     /// Granular permissions — absent in old tokens (defaults to all-true).
-    #[serde(default)]
+    #[serde(default, rename = "p", alias = "permissions")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permissions: Option<Permissions>,
 }
