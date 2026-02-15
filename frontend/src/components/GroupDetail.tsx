@@ -1130,7 +1130,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                     <Divider my="xs" />
                     <Stack gap={2}>
                       {member.paypal_email && (
-                        <Text size="xs" c="dimmed">PayPal: {member.paypal_email}</Text>
+                        <Text size="xs" c="dimmed">PayPal: <Anchor href={`https://paypal.me/${member.paypal_email}`} target="_blank" rel="noopener noreferrer">{member.paypal_email}</Anchor></Text>
                       )}
                       {member.iban && (
                         <MGroup gap="xs">
