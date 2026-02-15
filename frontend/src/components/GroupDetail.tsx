@@ -7,8 +7,10 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { DatePickerInput } from '@mantine/dates';
 import 'dayjs/locale/de';
-import * as api from '../api';
-import type { Group, Expense, Balance } from '../api';
+import * as api from '../offlineApi';
+import type { Group, Expense, Balance } from '../offlineApi';
+import { isPending } from '../offlineApi';
+import { useSync } from '../sync';
 import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
 
 interface GroupDetailProps {
@@ -86,8 +88,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
   const loadData = useCallback(async () => {
     const [expensesData, balancesData] = await Promise.all([
-      api.getExpenses(token),
-      api.getBalances(token),
+      api.getExpenses(token, group.id),
+      api.getBalances(token, group.id),
     ]);
     setExpenses(expensesData);
     setBalances(balancesData);
@@ -100,9 +102,17 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     }
   }, [token, selectedMemberId, group.id, group.currency]);
 
+  const { syncVersion } = useSync();
+
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Re-fetch data after sync completes
+  useEffect(() => {
+    if (syncVersion > 0) loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncVersion]);
 
   // Auto-fetch exchange rate for add form
   useEffect(() => {
@@ -134,6 +144,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
     await api.createExpense(
       token,
+      group.id,
       description,
       typeof amount === 'string' ? parseFloat(amount) : amount,
       paidBy,
@@ -161,7 +172,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     e.preventDefault();
     if (!newMemberName.trim()) return;
 
-    await api.addMember(token, newMemberName.trim());
+    await api.addMember(token, group.id, newMemberName.trim());
     setNewMemberName('');
     onGroupUpdated();
   };
@@ -189,7 +200,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   };
 
   const handleSavePayment = async (memberId: string) => {
-    await api.updateMemberPayment(token, memberId, editPaypal || null, editIban || null);
+    await api.updateMemberPayment(token, group.id, memberId, editPaypal || null, editIban || null);
     // If editing own payment info, also save to browser for reuse in other groups
     if (memberId === selectedMemberId) {
       savePaymentInfo(editPaypal || null, editIban || null);
@@ -213,7 +224,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       if (!member.paypal_email && !member.iban) {
         const stored = getStoredPaymentInfo();
         if (stored && (stored.paypal_email || stored.iban)) {
-          await api.updateMemberPayment(token, memberId, stored.paypal_email, stored.iban);
+          await api.updateMemberPayment(token, group.id, memberId, stored.paypal_email, stored.iban);
           onGroupUpdated();
         }
       }
@@ -223,6 +234,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const handleMarkReceived = async (fromId: string, fromName: string, toId: string, toName: string, amount: number) => {
     await api.createExpense(
       token,
+      group.id,
       `Settlement: ${fromName} → ${toName}`,
       amount,
       fromId,
@@ -257,6 +269,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
     await api.updateExpense(
       token,
+      group.id,
       editingExpenseId,
       editDescription,
       typeof editAmount === 'string' ? parseFloat(editAmount) : editAmount,
@@ -273,7 +286,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   };
 
   const handleDeleteExpense = async (expenseId: string) => {
-    await api.deleteExpense(token, expenseId);
+    await api.deleteExpense(token, group.id, expenseId);
     loadData();
   };
 
@@ -439,7 +452,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       targetGroupMembers: [], creditorInTargetId: preCreditorId,
       myIdInTarget: preMyId,
     } : null);
-    const targetGroup = await api.getGroup(targetStored.token);
+    const targetGroup = await api.getGroup(targetStored.token, targetStored.id);
     if (!targetGroup) {
       setCrossGroupTransfer(prev => prev ? { ...prev, loading: false } : null);
       return;
@@ -467,9 +480,9 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     const myNameInTarget = targetGroupMembers.find(m => m.id === myIdInTarget)?.name || 'Unknown';
 
     // Settle debt in current group
-    await api.createExpense(token, `Balance transferred to ${targetGroupName}`, amount, fromId, [], 'transfer', toId);
+    await api.createExpense(token, group.id, `Balance transferred to ${targetGroupName}`, amount, fromId, [], 'transfer', toId);
     // Create corresponding debt in target group
-    await api.createExpense(targetGroupToken, `Balance transferred from ${group.name}`, amount, creditorInTargetId, [], 'transfer', myIdInTarget);
+    await api.createExpense(targetGroupToken, targetGroupId || '', `Balance transferred from ${group.name}`, amount, creditorInTargetId, [], 'transfer', myIdInTarget);
 
     // Save identity in target group if not already set
     if (targetGroupId) {
@@ -823,6 +836,9 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                     <>
                       <MGroup justify="space-between" align="center" mb={4}>
                         <MGroup gap="xs">
+                          {isPending(expense) && (
+                            <Badge size="sm" color="orange" variant="light">⏳ Pending</Badge>
+                          )}
                           {expense.expense_type === 'transfer' && (
                             <Badge size="sm" color="green" variant="light">💸 Transfer</Badge>
                           )}
@@ -836,12 +852,16 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                           {expense.currency !== group.currency && (
                             <Text size="xs" c="dimmed">≈ {fmtAmt(expense.amount * expense.exchange_rate, group.currency)}</Text>
                           )}
-                          <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => handleStartEditExpense(expense)}>
-                            <Text size="xs">✏️</Text>
-                          </ActionIcon>
-                          <ActionIcon size="sm" variant="subtle" color="red" onClick={() => handleDeleteExpense(expense.id)}>
-                            <Text size="xs">🗑️</Text>
-                          </ActionIcon>
+                          {!isPending(expense) && (
+                            <>
+                              <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => handleStartEditExpense(expense)}>
+                                <Text size="xs">✏️</Text>
+                              </ActionIcon>
+                              <ActionIcon size="sm" variant="subtle" color="red" onClick={() => handleDeleteExpense(expense.id)}>
+                                <Text size="xs">🗑️</Text>
+                              </ActionIcon>
+                            </>
+                          )}
                         </MGroup>
                       </MGroup>
                       <Text size="sm" c="dimmed">

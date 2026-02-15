@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert } from '@mantine/core';
-import * as api from './api';
-import type { Group } from './api';
+import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge } from '@mantine/core';
+import * as api from './offlineApi';
+import type { Group } from './offlineApi';
 import { CreateGroup } from './components/CreateGroup';
 import { GroupDetail } from './components/GroupDetail';
 import { GroupList } from './components/GroupList';
 import type { StoredGroup } from './storage';
 import { getStoredGroups, saveGroup } from './storage';
+import { SyncProvider, useSync } from './sync';
 
 // Extract token from URL hash (used for share links)
 const getTokenFromUrl = (): string | null => {
@@ -19,7 +20,23 @@ const clearTokenFromUrl = () => {
   window.history.replaceState({}, '', '/');
 };
 
-function App() {
+function SyncStatus() {
+  const { isOnline, pendingCount, syncing } = useSync();
+  if (isOnline && pendingCount === 0 && !syncing) return null;
+  return (
+    <div style={{ position: 'fixed', bottom: 16, right: 16, display: 'flex', gap: 8, zIndex: 1000 }}>
+      {!isOnline && <Badge color="orange" size="lg" variant="filled">📡 Offline</Badge>}
+      {syncing && <Badge color="blue" size="lg" variant="filled">🔄 Syncing…</Badge>}
+      {!syncing && pendingCount > 0 && (
+        <Badge color="yellow" size="lg" variant="filled">
+          ⏳ {pendingCount} pending
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+function AppContent() {
   const [group, setGroup] = useState<Group | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +54,8 @@ function App() {
     } else {
       setLoading(false);
     }
+    // Prefetch all stored groups in the background for offline access
+    api.prefetchAllGroups();
   }, []);
 
   const loadGroup = async (authToken: string) => {
@@ -78,7 +97,7 @@ function App() {
 
   const refreshGroup = async () => {
     if (token) {
-      const updated = await api.getGroup(token);
+      const updated = await api.getGroup(token, group?.id);
       if (updated) setGroup(updated);
     }
   };
@@ -155,6 +174,15 @@ function App() {
         </Paper>
       )}
     </Container>
+  );
+}
+
+function App() {
+  return (
+    <SyncProvider>
+      <AppContent />
+      <SyncStatus />
+    </SyncProvider>
   );
 }
 
