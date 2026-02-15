@@ -6,7 +6,7 @@ import { CreateGroup } from './components/CreateGroup';
 import { GroupDetail } from './components/GroupDetail';
 import { GroupList } from './components/GroupList';
 import type { StoredGroup } from './storage';
-import { getStoredGroups, saveGroup } from './storage';
+import { getStoredGroups, saveGroup, removeGroup } from './storage';
 import { SyncProvider, useSync } from './sync';
 
 // Extract token from URL hash (used for share links)
@@ -156,8 +156,20 @@ function AppContent() {
     try {
       const groupData = await api.getGroup(authToken);
       if (groupData) {
+        // If user already has a stored token for this group, merge permissions
+        let finalToken = authToken;
+        const existing = getStoredGroups().find(g => g.id === groupData.id);
+        if (existing && existing.token !== authToken) {
+          try {
+            const merged = await api.mergeToken(authToken, existing.token);
+            finalToken = merged.token;
+          } catch {
+            // Merge failed (e.g. old server) — keep the new token
+          }
+        }
         setGroup(groupData);
-        saveGroup(groupData.id, groupData.name, authToken);
+        setToken(finalToken);
+        saveGroup(groupData.id, groupData.name, finalToken);
         setStoredGroups(getStoredGroups());
       } else {
         setError('Invalid or expired link');
@@ -192,6 +204,13 @@ function AppContent() {
       const updated = await api.getGroup(token, group?.id);
       if (updated) setGroup(updated);
     }
+  };
+
+  const handleGroupDeleted = () => {
+    if (group) removeGroup(group.id);
+    setGroup(null);
+    setToken(null);
+    setStoredGroups(getStoredGroups());
   };
 
   if (loading) {
@@ -233,6 +252,7 @@ function AppContent() {
           group={group}
           token={token}
           onGroupUpdated={refreshGroup}
+          onGroupDeleted={handleGroupDeleted}
         />
       </Container>
     );

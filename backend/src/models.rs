@@ -149,6 +149,39 @@ pub struct GroupCreatedResponse {
     pub token: String,
 }
 
+/// Request to generate a share link with specific permissions.
+#[derive(Debug, Deserialize)]
+pub struct GenerateShareLinkRequest {
+    pub can_delete_group: Option<bool>,
+    pub can_manage_members: Option<bool>,
+    pub can_update_payment: Option<bool>,
+    pub can_add_expenses: Option<bool>,
+    pub can_edit_expenses: Option<bool>,
+}
+
+/// Response containing the generated share token and its effective permissions.
+#[derive(Debug, Serialize)]
+pub struct ShareLinkResponse {
+    pub token: String,
+    pub permissions: PermissionsResponse,
+}
+
+/// Request to merge an existing token with the current one.
+#[derive(Debug, Deserialize)]
+pub struct MergeTokenRequest {
+    pub other_token: String,
+}
+
+/// Permissions in API responses (always resolved to concrete booleans).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PermissionsResponse {
+    pub can_delete_group: bool,
+    pub can_manage_members: bool,
+    pub can_update_payment: bool,
+    pub can_add_expenses: bool,
+    pub can_edit_expenses: bool,
+}
+
 // Conversion helpers
 impl From<MemberRow> for Member {
     fn from(row: MemberRow) -> Self {

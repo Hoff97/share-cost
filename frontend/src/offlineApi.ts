@@ -2,7 +2,7 @@
 // for reads, and queues mutations for later sync when offline.
 
 import * as api from './api';
-import type { Group, Member, Expense, Balance, GroupCreatedResponse } from './api';
+import type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse } from './api';
 import {
   cacheGroup, getCachedGroup,
   cacheExpenses, getCachedExpenses,
@@ -12,7 +12,7 @@ import {
 import { getStoredGroups } from './storage';
 
 // Re-export all types so components can import from here
-export type { Group, Member, Expense, Balance, GroupCreatedResponse };
+export type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse };
 
 /** Returns true for expenses created offline that haven't been synced yet */
 export function isPending(expense: Expense): boolean {
@@ -256,4 +256,25 @@ export async function updateMemberPayment(
       ? { ...member, paypal_email: paypalEmail, iban }
       : { id: memberId, name: '', paypal_email: paypalEmail, iban };
   }
+}
+
+// ─── Permissions (online only, no offline caching needed) ───────────────────
+
+export async function getPermissions(token: string): Promise<Permissions> {
+  return api.getPermissions(token);
+}
+
+export async function generateShareLink(
+  token: string,
+  permissions: Partial<Permissions>,
+): Promise<ShareLinkResponse> {
+  return api.generateShareLink(token, permissions);
+}
+
+export async function mergeToken(token: string, otherToken: string): Promise<ShareLinkResponse> {
+  return api.mergeToken(token, otherToken);
+}
+
+export async function deleteGroup(token: string): Promise<void> {
+  return api.deleteGroup(token);
 }

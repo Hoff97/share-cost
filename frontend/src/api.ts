@@ -41,6 +41,19 @@ export interface Balance {
   balance: number;
 }
 
+export interface Permissions {
+  can_delete_group: boolean;
+  can_manage_members: boolean;
+  can_update_payment: boolean;
+  can_add_expenses: boolean;
+  can_edit_expenses: boolean;
+}
+
+export interface ShareLinkResponse {
+  token: string;
+  permissions: Permissions;
+}
+
 // Helper to get auth headers
 const authHeaders = (token: string): HeadersInit => ({
   'Content-Type': 'application/json',
@@ -173,6 +186,59 @@ export const deleteExpense = async (
   expenseId: string
 ): Promise<void> => {
   await fetch(`${API_BASE}/groups/current/expenses/${expenseId}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
+};
+
+// Get current token's permissions
+export const getPermissions = async (token: string): Promise<Permissions> => {
+  const res = await fetch(`${API_BASE}/groups/current/permissions`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    // Old servers without permissions endpoint → assume all
+    return {
+      can_delete_group: true,
+      can_manage_members: true,
+      can_update_payment: true,
+      can_add_expenses: true,
+      can_edit_expenses: true,
+    };
+  }
+  return res.json();
+};
+
+// Generate a share link with selected permissions
+export const generateShareLink = async (
+  token: string,
+  permissions: Partial<Permissions>
+): Promise<ShareLinkResponse> => {
+  const res = await fetch(`${API_BASE}/groups/current/share`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify(permissions),
+  });
+  return res.json();
+};
+
+// Merge two tokens for the same group (union of permissions)
+export const mergeToken = async (
+  token: string,
+  otherToken: string
+): Promise<ShareLinkResponse> => {
+  const res = await fetch(`${API_BASE}/groups/current/merge-token`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ other_token: otherToken }),
+  });
+  if (!res.ok) throw new Error('Failed to merge tokens');
+  return res.json();
+};
+
+// Delete group
+export const deleteGroup = async (token: string): Promise<void> => {
+  await fetch(`${API_BASE}/groups/current`, {
     method: 'DELETE',
     headers: authHeaders(token),
   });

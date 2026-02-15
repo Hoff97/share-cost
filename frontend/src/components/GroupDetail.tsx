@@ -3,12 +3,13 @@ import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
   Group as MGroup, SegmentedControl, Checkbox, Badge, Card,
   Divider, CopyButton, Tooltip, Collapse, Tabs, Anchor, ActionIcon,
+  Modal, Switch,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { DatePickerInput } from '@mantine/dates';
 import 'dayjs/locale/de';
 import * as api from '../offlineApi';
-import type { Group, Expense, Balance } from '../offlineApi';
+import type { Group, Expense, Balance, Permissions } from '../offlineApi';
 import { isPending } from '../offlineApi';
 import { useSync } from '../sync';
 import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
@@ -17,6 +18,7 @@ interface GroupDetailProps {
   group: Group;
   token: string;
   onGroupUpdated: () => void;
+  onGroupDeleted?: () => void;
 }
 
 // Convert YYYY-MM-DD → DD.MM.YYYY for display
@@ -55,7 +57,7 @@ const fetchRate = async (from: string, to: string, date: string): Promise<number
   }
 };
 
-export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) {
+export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: GroupDetailProps) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [description, setDescription] = useState('');
@@ -85,14 +87,34 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     const stored = getStoredGroup(group.id);
     return stored?.selectedMemberId ?? null;
   });
+  // Permissions
+  const [permissions, setPermissions] = useState<Permissions>({
+    can_delete_group: true,
+    can_manage_members: true,
+    can_update_payment: true,
+    can_add_expenses: true,
+    can_edit_expenses: true,
+  });
+  // Share modal
+  const [shareModalOpened, { open: openShareModal, close: closeShareModal }] = useDisclosure(false);
+  const [sharePerms, setSharePerms] = useState<Permissions>({
+    can_delete_group: false,
+    can_manage_members: false,
+    can_update_payment: true,
+    can_add_expenses: true,
+    can_edit_expenses: true,
+  });
+  const [generatedShareUrl, setGeneratedShareUrl] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    const [expensesData, balancesData] = await Promise.all([
+    const [expensesData, balancesData, permsData] = await Promise.all([
       api.getExpenses(token, group.id),
       api.getBalances(token, group.id),
+      api.getPermissions(token).catch(() => permissions),
     ]);
     setExpenses(expensesData);
     setBalances(balancesData);
+    setPermissions(permsData);
 
     if (selectedMemberId) {
       const myBalance = balancesData.find(b => b.user_id === selectedMemberId);
@@ -209,7 +231,38 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     onGroupUpdated();
   };
 
-  const shareUrl = `${window.location.origin}/#token=${token}`;
+  const handleOpenShareModal = () => {
+    // Reset share link and set defaults capped by own permissions
+    setGeneratedShareUrl(null);
+    setSharePerms({
+      can_delete_group: false,
+      can_manage_members: false,
+      can_update_payment: permissions.can_update_payment,
+      can_add_expenses: permissions.can_add_expenses,
+      can_edit_expenses: permissions.can_edit_expenses,
+    });
+    openShareModal();
+  };
+
+  const handleGenerateShareLink = async () => {
+    try {
+      const resp = await api.generateShareLink(token, sharePerms);
+      setGeneratedShareUrl(`${window.location.origin}/#token=${resp.token}`);
+    } catch {
+      // fallback: use current token
+      setGeneratedShareUrl(`${window.location.origin}/#token=${token}`);
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!confirm('Are you sure you want to permanently delete this group and all its data?')) return;
+    try {
+      await api.deleteGroup(token);
+      onGroupDeleted?.();
+    } catch {
+      alert('Failed to delete group. You may not have permission.');
+    }
+  };
 
   const handleSelectMember = async (memberId: string) => {
     const member = group.members.find(m => m.id === memberId);
@@ -532,15 +585,9 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
               w={160}
             />
           )}
-          <CopyButton value={shareUrl}>
-            {({ copied, copy }) => (
-              <Tooltip label={copied ? 'Copied!' : 'Copy share link'}>
-                <Button size="xs" color={copied ? 'teal' : 'green'} onClick={copy}>
-                  {copied ? '✓ Copied!' : '🔗 Share'}
-                </Button>
-              </Tooltip>
-            )}
-          </CopyButton>
+          <Button size="xs" color="green" onClick={handleOpenShareModal}>
+            🔗 Share
+          </Button>
         </MGroup>
       </MGroup>
 
@@ -560,7 +607,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
 
         {/* Expenses Tab */}
         <Tabs.Panel value="expenses" pt="md">
-          {/* Collapsible Add Entry */}
+          {/* Collapsible Add Entry — only shown if user can add expenses */}
+          {permissions.can_add_expenses && (
           <Paper shadow="xs" p="md" radius="md" withBorder mb="md">
             <MGroup
               justify="space-between"
@@ -695,6 +743,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
               </form>
             </Collapse>
           </Paper>
+          )}
 
           <Stack gap="xs">
             {expenses.length === 0 ? (
@@ -852,7 +901,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                           {expense.currency !== group.currency && (
                             <Text size="xs" c="dimmed">≈ {fmtAmt(expense.amount * expense.exchange_rate, group.currency)}</Text>
                           )}
-                          {!isPending(expense) && (
+                          {!isPending(expense) && permissions.can_edit_expenses && (
                             <>
                               <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => handleStartEditExpense(expense)}>
                                 <Text size="xs">✏️</Text>
@@ -1101,7 +1150,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
                   <MGroup gap="xs">
                     {member.paypal_email && <Badge size="xs" color="blue" variant="light">PayPal</Badge>}
                     {member.iban && <Badge size="xs" color="gray" variant="light">IBAN</Badge>}
-                    {editingPayment !== member.id && (
+                    {editingPayment !== member.id && permissions.can_update_payment && (
                       <Button size="compact-xs" variant="subtle" onClick={() => handleStartEditPayment(member)}>
                         ✏️
                       </Button>
@@ -1160,20 +1209,93 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
               </Card>
             ))}
           </Stack>
-          <Divider my="sm" />
-          <form onSubmit={handleAddMember}>
-            <MGroup gap="xs">
-              <TextInput
-                placeholder="Add new member..."
-                value={newMemberName}
-                onChange={(e) => setNewMemberName(e.target.value)}
-                style={{ flex: 1 }}
-              />
-              <Button type="submit" variant="light">Add</Button>
-            </MGroup>
-          </form>
+          {permissions.can_manage_members && (
+            <>
+              <Divider my="sm" />
+              <form onSubmit={handleAddMember}>
+                <MGroup gap="xs">
+                  <TextInput
+                    placeholder="Add new member..."
+                    value={newMemberName}
+                    onChange={(e) => setNewMemberName(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <Button type="submit" variant="light">Add</Button>
+                </MGroup>
+              </form>
+            </>
+          )}
+          {permissions.can_delete_group && (
+            <>
+              <Divider my="md" />
+              <Button color="red" variant="light" fullWidth onClick={handleDeleteGroup}>
+                🗑️ Delete Group
+              </Button>
+            </>
+          )}
         </Tabs.Panel>
       </Tabs>
+
+      {/* Share Link Modal */}
+      <Modal opened={shareModalOpened} onClose={closeShareModal} title="Share this group" centered>
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Choose which permissions to give people who use this link.
+          </Text>
+          <Stack gap="xs">
+            <Switch
+              label="Delete group"
+              checked={sharePerms.can_delete_group}
+              onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_delete_group: v })); }}
+              disabled={!permissions.can_delete_group}
+            />
+            <Switch
+              label="Add / remove members"
+              checked={sharePerms.can_manage_members}
+              onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_manage_members: v })); }}
+              disabled={!permissions.can_manage_members}
+            />
+            <Switch
+              label="Update payment info"
+              checked={sharePerms.can_update_payment}
+              onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_update_payment: v })); }}
+              disabled={!permissions.can_update_payment}
+            />
+            <Switch
+              label="Add expenses"
+              checked={sharePerms.can_add_expenses}
+              onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_add_expenses: v })); }}
+              disabled={!permissions.can_add_expenses}
+            />
+            <Switch
+              label="Edit / remove expenses"
+              checked={sharePerms.can_edit_expenses}
+              onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_edit_expenses: v })); }}
+              disabled={!permissions.can_edit_expenses}
+            />
+          </Stack>
+          {!generatedShareUrl ? (
+            <Button onClick={handleGenerateShareLink} fullWidth>
+              Generate Share Link
+            </Button>
+          ) : (
+            <Stack gap="xs">
+              <TextInput
+                value={generatedShareUrl}
+                readOnly
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <CopyButton value={generatedShareUrl}>
+                {({ copied, copy }) => (
+                  <Button color={copied ? 'teal' : 'blue'} onClick={copy} fullWidth>
+                    {copied ? '✓ Copied!' : 'Copy Link'}
+                  </Button>
+                )}
+              </CopyButton>
+            </Stack>
+          )}
+        </Stack>
+      </Modal>
     </Stack>
   );
 }

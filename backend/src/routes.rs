@@ -7,7 +7,7 @@ use sqlx;
 use uuid::Uuid;
 use chrono::Utc;
 
-use crate::auth::{generate_token, GroupAuth};
+use crate::auth::{generate_token, validate_token, GroupAuth, Permissions};
 use crate::db;
 use crate::models::*;
 
@@ -76,8 +76,8 @@ async fn create_group(
         created_at,
     };
 
-    // Generate JWT for this group
-    let token = generate_token(group_id)
+    // Generate JWT for this group (creator gets all permissions)
+    let token = generate_token(group_id, Some(Permissions::all()))
         .map_err(|_| Status::InternalServerError)?;
 
     Ok(Json(GroupCreatedResponse { group, token }))
@@ -131,12 +131,15 @@ async fn get_current_group(
     Ok(Json(group))
 }
 
-// Add member - requires valid JWT
+// Add member - requires valid JWT + manage_members permission
 #[post("/groups/current/members", data = "<request>")]
 async fn add_member(
     auth: GroupAuth,
     request: Json<AddMemberRequest>,
 ) -> Result<Json<Group>, Status> {
+    if !auth.permissions.has_manage_members() {
+        return Err(Status::Forbidden);
+    }
     let pool = db::get_pool();
     
     // Check group exists
@@ -196,13 +199,16 @@ async fn add_member(
     Ok(Json(group))
 }
 
-// Update member payment info - requires valid JWT
+// Update member payment info - requires valid JWT + update_payment permission
 #[put("/groups/current/members/<member_id>/payment", data = "<request>")]
 async fn update_member_payment(
     auth: GroupAuth,
     member_id: &str,
     request: Json<UpdateMemberPaymentRequest>,
 ) -> Result<Json<Member>, Status> {
+    if !auth.permissions.has_update_payment() {
+        return Err(Status::Forbidden);
+    }
     let pool = db::get_pool();
     let member_uuid = Uuid::parse_str(member_id).map_err(|_| Status::BadRequest)?;
 
@@ -295,12 +301,15 @@ async fn get_expenses(
     Ok(Json(expenses))
 }
 
-// Create expense - requires valid JWT
+// Create expense - requires valid JWT + add_expenses permission
 #[post("/groups/current/expenses", data = "<request>")]
 async fn create_expense(
     auth: GroupAuth,
     request: Json<CreateExpenseRequest>,
 ) -> Result<Json<Expense>, Status> {
+    if !auth.permissions.has_add_expenses() {
+        return Err(Status::Forbidden);
+    }
     let pool = db::get_pool();
     let expense_id = Uuid::new_v4();
     let created_at = Utc::now();
@@ -381,13 +390,16 @@ async fn create_expense(
     Ok(Json(expense))
 }
 
-// Update expense - requires valid JWT
+// Update expense - requires valid JWT + edit_expenses permission
 #[put("/groups/current/expenses/<expense_id>", data = "<request>")]
 async fn update_expense(
     auth: GroupAuth,
     expense_id: &str,
     request: Json<UpdateExpenseRequest>,
 ) -> Result<Json<Expense>, Status> {
+    if !auth.permissions.has_edit_expenses() {
+        return Err(Status::Forbidden);
+    }
     let pool = db::get_pool();
     let expense_uuid = Uuid::parse_str(expense_id).map_err(|_| Status::BadRequest)?;
 
@@ -476,12 +488,15 @@ async fn update_expense(
     Ok(Json(expense))
 }
 
-// Delete expense - requires valid JWT
+// Delete expense - requires valid JWT + edit_expenses permission
 #[delete("/groups/current/expenses/<expense_id>")]
 async fn delete_expense(
     auth: GroupAuth,
     expense_id: &str,
 ) -> Result<Status, Status> {
+    if !auth.permissions.has_edit_expenses() {
+        return Err(Status::Forbidden);
+    }
     let pool = db::get_pool();
     let expense_uuid = Uuid::parse_str(expense_id).map_err(|_| Status::BadRequest)?;
 
@@ -652,17 +667,135 @@ async fn get_balances(
     Ok(Json(balances))
 }
 
+// Get current token's permissions
+#[get("/groups/current/permissions")]
+fn get_permissions(
+    auth: GroupAuth,
+) -> Json<PermissionsResponse> {
+    let p = &auth.permissions;
+    Json(PermissionsResponse {
+        can_delete_group: p.has_delete_group(),
+        can_manage_members: p.has_manage_members(),
+        can_update_payment: p.has_update_payment(),
+        can_add_expenses: p.has_add_expenses(),
+        can_edit_expenses: p.has_edit_expenses(),
+    })
+}
+
+// Generate share link with selected permissions (capped by caller's own)
+#[post("/groups/current/share", data = "<request>")]
+fn generate_share_link(
+    auth: GroupAuth,
+    request: Json<GenerateShareLinkRequest>,
+) -> Result<Json<ShareLinkResponse>, Status> {
+    let requested = Permissions {
+        can_delete_group:   request.can_delete_group,
+        can_manage_members: request.can_manage_members,
+        can_update_payment: request.can_update_payment,
+        can_add_expenses:   request.can_add_expenses,
+        can_edit_expenses:  request.can_edit_expenses,
+    };
+    let effective = requested.cap_by(&auth.permissions);
+    let token = generate_token(auth.group_id, Some(effective.clone()))
+        .map_err(|_| Status::InternalServerError)?;
+
+    Ok(Json(ShareLinkResponse {
+        token,
+        permissions: PermissionsResponse {
+            can_delete_group:   effective.has_delete_group(),
+            can_manage_members: effective.has_manage_members(),
+            can_update_payment: effective.has_update_payment(),
+            can_add_expenses:   effective.has_add_expenses(),
+            can_edit_expenses:  effective.has_edit_expenses(),
+        },
+    }))
+}
+
+// Merge two tokens for the same group → new token with the union of permissions
+#[post("/groups/current/merge-token", data = "<request>")]
+fn merge_token(
+    auth: GroupAuth,
+    request: Json<MergeTokenRequest>,
+) -> Result<Json<ShareLinkResponse>, Status> {
+    let other_claims = validate_token(&request.other_token)
+        .map_err(|_| Status::BadRequest)?;
+
+    // Both tokens must be for the same group
+    if other_claims.group_id != auth.group_id {
+        return Err(Status::BadRequest);
+    }
+
+    let merged = auth.permissions.union_with(&other_claims.effective_permissions());
+    let token = generate_token(auth.group_id, Some(merged.clone()))
+        .map_err(|_| Status::InternalServerError)?;
+
+    Ok(Json(ShareLinkResponse {
+        token,
+        permissions: PermissionsResponse {
+            can_delete_group:   merged.has_delete_group(),
+            can_manage_members: merged.has_manage_members(),
+            can_update_payment: merged.has_update_payment(),
+            can_add_expenses:   merged.has_add_expenses(),
+            can_edit_expenses:  merged.has_edit_expenses(),
+        },
+    }))
+}
+
+// Delete group - requires valid JWT + delete_group permission
+#[delete("/groups/current")]
+async fn delete_group(
+    auth: GroupAuth,
+) -> Result<Status, Status> {
+    if !auth.permissions.has_delete_group() {
+        return Err(Status::Forbidden);
+    }
+    let pool = db::get_pool();
+
+    // Delete expense splits, then expenses, then members, then group
+    sqlx::query(
+        "DELETE FROM expense_splits WHERE expense_id IN (SELECT id FROM expenses WHERE group_id = $1)"
+    )
+    .bind(auth.group_id)
+    .execute(pool)
+    .await
+    .map_err(|e| { eprintln!("Failed to delete expense splits: {}", e); Status::InternalServerError })?;
+
+    sqlx::query("DELETE FROM expenses WHERE group_id = $1")
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| { eprintln!("Failed to delete expenses: {}", e); Status::InternalServerError })?;
+
+    sqlx::query("DELETE FROM members WHERE group_id = $1")
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| { eprintln!("Failed to delete members: {}", e); Status::InternalServerError })?;
+
+    sqlx::query("DELETE FROM groups WHERE id = $1")
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| { eprintln!("Failed to delete group: {}", e); Status::InternalServerError })?;
+
+    Ok(Status::NoContent)
+}
+
 pub fn get_routes() -> Vec<Route> {
     routes![
         health,
         create_group,
         get_current_group,
+        get_permissions,
         add_member,
         update_member_payment,
         get_expenses,
         create_expense,
         update_expense,
         delete_expense,
-        get_balances
+        get_balances,
+        generate_share_link,
+        merge_token,
+        delete_group
     ]
 }
