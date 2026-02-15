@@ -398,42 +398,101 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const settlements = useMemo((): Settlement[] => {
     if (balances.length === 0) return [];
 
-    // Debtors have negative balance (they owe money), creditors have positive (they are owed)
-    const debtors: { id: string; name: string; amount: number }[] = [];
-    const creditors: { id: string; name: string; amount: number }[] = [];
+    type Person = { id: string; name: string; balance: number };
+    const people: Person[] = balances
+      .filter(b => Math.abs(b.balance) > 0.005)
+      .map(b => ({ id: b.user_id, name: b.user_name, balance: b.balance }));
 
-    for (const b of balances) {
-      if (b.balance < -0.005) {
-        debtors.push({ id: b.user_id, name: b.user_name, amount: Math.abs(b.balance) });
-      } else if (b.balance > 0.005) {
-        creditors.push({ id: b.user_id, name: b.user_name, amount: b.balance });
+    const n = people.length;
+    if (n === 0) return [];
+
+    // Greedy two-pointer settlement within a set of indices
+    const greedySettle = (indices: number[]): Settlement[] => {
+      const debtors: { id: string; name: string; amount: number }[] = [];
+      const creditors: { id: string; name: string; amount: number }[] = [];
+      for (const i of indices) {
+        if (people[i].balance < -0.005)
+          debtors.push({ id: people[i].id, name: people[i].name, amount: -people[i].balance });
+        else if (people[i].balance > 0.005)
+          creditors.push({ id: people[i].id, name: people[i].name, amount: people[i].balance });
+      }
+      debtors.sort((a, b) => b.amount - a.amount);
+      creditors.sort((a, b) => b.amount - a.amount);
+      const res: Settlement[] = [];
+      let di = 0, ci = 0;
+      while (di < debtors.length && ci < creditors.length) {
+        const t = Math.min(debtors[di].amount, creditors[ci].amount);
+        if (t > 0.005) {
+          res.push({
+            from: debtors[di].id, fromName: debtors[di].name,
+            to: creditors[ci].id, toName: creditors[ci].name,
+            amount: Math.round(t * 100) / 100,
+          });
+        }
+        debtors[di].amount -= t;
+        creditors[ci].amount -= t;
+        if (debtors[di].amount < 0.005) di++;
+        if (creditors[ci].amount < 0.005) ci++;
+      }
+      return res;
+    };
+
+    // For large groups, fall back to simple greedy (bitmask DP is O(3^n))
+    if (n > 16) {
+      return greedySettle(people.map((_, i) => i));
+    }
+
+    // Optimal: partition people into max independent zero-sum subsets.
+    // Each subset of size k settles with k-1 transfers, so more subsets = fewer transfers.
+    const total = 1 << n;
+
+    // Precompute subset sums (use integer cents to avoid floating-point drift)
+    const cents = people.map(p => Math.round(p.balance * 100));
+    const subSum = new Int32Array(total);
+    for (let mask = 1; mask < total; mask++) {
+      const lsb = mask & -mask;
+      const bit = 31 - Math.clz32(lsb);
+      subSum[mask] = subSum[mask ^ lsb] + cents[bit];
+    }
+
+    // dp[mask] = max number of independent zero-sum subsets that partition mask
+    const dp = new Int8Array(total); // dp[0] = 0
+    for (let mask = 1; mask < total; mask++) {
+      // Enumerate all non-empty submasks of mask
+      let sub = mask;
+      while (sub > 0) {
+        if (subSum[sub] === 0) {
+          const candidate = dp[mask ^ sub] + 1;
+          if (candidate > dp[mask]) dp[mask] = candidate;
+        }
+        sub = (sub - 1) & mask;
       }
     }
 
-    // Sort both descending by amount for greedy matching
-    debtors.sort((a, b) => b.amount - a.amount);
-    creditors.sort((a, b) => b.amount - a.amount);
+    // Backtrack to find the actual partition
+    const groups: number[][] = [];
+    let remaining = total - 1;
+    while (remaining > 0) {
+      let sub = remaining;
+      while (sub > 0) {
+        if (subSum[sub] === 0 && dp[remaining ^ sub] === dp[remaining] - 1) {
+          const group: number[] = [];
+          for (let i = 0; i < n; i++) {
+            if (sub & (1 << i)) group.push(i);
+          }
+          groups.push(group);
+          remaining ^= sub;
+          break;
+        }
+        sub = (sub - 1) & remaining;
+      }
+    }
 
+    // Settle each independent group with greedy
     const result: Settlement[] = [];
-    let di = 0, ci = 0;
-
-    while (di < debtors.length && ci < creditors.length) {
-      const transfer = Math.min(debtors[di].amount, creditors[ci].amount);
-      if (transfer > 0.005) {
-        result.push({
-          from: debtors[di].id,
-          fromName: debtors[di].name,
-          to: creditors[ci].id,
-          toName: creditors[ci].name,
-          amount: Math.round(transfer * 100) / 100,
-        });
-      }
-      debtors[di].amount -= transfer;
-      creditors[ci].amount -= transfer;
-      if (debtors[di].amount < 0.005) di++;
-      if (creditors[ci].amount < 0.005) ci++;
+    for (const group of groups) {
+      result.push(...greedySettle(group));
     }
-
     return result;
   }, [balances]);
 
