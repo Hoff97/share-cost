@@ -55,6 +55,12 @@ impl Permissions {
     pub fn has_add_expenses(&self) -> bool { Self::resolve(self.can_add_expenses) }
     pub fn has_edit_expenses(&self) -> bool { Self::resolve(self.can_edit_expenses) }
 
+    /// Returns true if every permission is granted.
+    pub fn has_all(&self) -> bool {
+        self.has_delete_group() && self.has_manage_members() && self.has_update_payment()
+            && self.has_add_expenses() && self.has_edit_expenses()
+    }
+
     /// Cap each permission by the caller's own permissions (share link can't escalate).
     pub fn cap_by(&self, caller: &Permissions) -> Permissions {
         Permissions {
@@ -83,7 +89,6 @@ impl Permissions {
 pub struct Claims {
     #[serde(rename = "g", alias = "group_id")]
     pub group_id: Uuid,
-    #[serde(rename = "e", alias = "exp")]
     pub exp: usize,
     /// Granular permissions — absent in old tokens (defaults to all-true).
     #[serde(default, rename = "p", alias = "permissions")]

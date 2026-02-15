@@ -3,13 +3,14 @@ import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
   Group as MGroup, SegmentedControl, Checkbox, Badge, Card,
   Divider, CopyButton, Tooltip, Collapse, Tabs, Anchor, ActionIcon,
-  Modal, Switch,
+  Modal, Switch, CloseButton, Center, useComputedColorScheme,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { DatePickerInput } from '@mantine/dates';
+import { QRCodeSVG } from 'qrcode.react';
 import 'dayjs/locale/de';
 import * as api from '../offlineApi';
-import type { Group, Expense, Balance, Permissions } from '../offlineApi';
+import type { Group, Expense, Balance, Permissions, ShareLinkItem } from '../offlineApi';
 import { isPending } from '../offlineApi';
 import { useSync } from '../sync';
 import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
@@ -58,6 +59,7 @@ const fetchRate = async (from: string, to: string, date: string): Promise<number
 };
 
 export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: GroupDetailProps) {
+  const colorScheme = useComputedColorScheme('light');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [description, setDescription] = useState('');
@@ -105,6 +107,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     can_edit_expenses: true,
   });
   const [generatedShareUrl, setGeneratedShareUrl] = useState<string | null>(null);
+  const [existingShareLinks, setExistingShareLinks] = useState<ShareLinkItem[]>([]);
 
   const loadData = useCallback(async () => {
     const [expensesData, balancesData, permsData] = await Promise.all([
@@ -241,16 +244,32 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       can_add_expenses: permissions.can_add_expenses,
       can_edit_expenses: permissions.can_edit_expenses,
     });
+    // Load existing share links
+    api.listShareLinks(token).then(setExistingShareLinks).catch(() => {});
     openShareModal();
   };
 
   const handleGenerateShareLink = async () => {
     try {
       const resp = await api.generateShareLink(token, sharePerms);
-      setGeneratedShareUrl(`${window.location.origin}/#token=${resp.token}`);
+      setGeneratedShareUrl(`${window.location.origin}/#join=${resp.code}`);
+      // Refresh the list
+      api.listShareLinks(token).then(setExistingShareLinks).catch(() => {});
     } catch {
-      // fallback: use current token
-      setGeneratedShareUrl(`${window.location.origin}/#token=${token}`);
+      alert('Failed to generate share link. Please try again.');
+    }
+  };
+
+  const handleDeleteShareLink = async (code: string) => {
+    try {
+      await api.deleteShareLink(token, code);
+      setExistingShareLinks(prev => prev.filter(l => l.code !== code));
+      // If the deleted link was the currently shown one, clear it
+      if (generatedShareUrl?.includes(code)) {
+        setGeneratedShareUrl(null);
+      }
+    } catch {
+      alert('Failed to delete share link.');
     }
   };
 
@@ -1239,7 +1258,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       </Tabs>
 
       {/* Share Link Modal */}
-      <Modal opened={shareModalOpened} onClose={closeShareModal} title="Share this group" centered>
+      <Modal opened={shareModalOpened} onClose={closeShareModal} title="Share this group" centered size="md">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             Choose which permissions to give people who use this link.
@@ -1282,6 +1301,11 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
             </Button>
           ) : (
             <Stack gap="xs">
+              <Center>
+                <Paper p="xs" radius="lg" withBorder shadow="sm" style={{ display: 'inline-block' }}>
+                  <QRCodeSVG value={generatedShareUrl} size={180} bgColor="transparent" fgColor={colorScheme === 'dark' ? '#c1c2c5' : '#000000'} />
+                </Paper>
+              </Center>
               <TextInput
                 value={generatedShareUrl}
                 readOnly
@@ -1295,6 +1319,49 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                 )}
               </CopyButton>
             </Stack>
+          )}
+
+          {existingShareLinks.length > 0 && (
+            <>
+              <Divider label="Existing share links" labelPosition="center" />
+              <Stack gap="xs">
+                {existingShareLinks.map(link => {
+                  const permLabels: string[] = [];
+                  if (link.can_add_expenses) permLabels.push('Add');
+                  if (link.can_edit_expenses) permLabels.push('Edit');
+                  if (link.can_update_payment) permLabels.push('Payment');
+                  if (link.can_manage_members) permLabels.push('Members');
+                  if (link.can_delete_group) permLabels.push('Delete');
+                  const url = `${window.location.origin}/#join=${link.code}`;
+                  return (
+                    <Paper key={link.code} p="xs" withBorder radius="sm">
+                      <MGroup justify="space-between" wrap="nowrap" gap="xs">
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <Text size="xs" truncate="end" ff="monospace">{link.code}</Text>
+                          <MGroup gap={4} mt={2}>
+                            {permLabels.map(l => (
+                              <Badge key={l} size="xs" variant="light">{l}</Badge>
+                            ))}
+                          </MGroup>
+                        </div>
+                        <MGroup gap={4} wrap="nowrap">
+                          <CopyButton value={url}>
+                            {({ copied, copy }) => (
+                              <Tooltip label={copied ? 'Copied!' : 'Copy link'}>
+                                <ActionIcon size="sm" variant="subtle" color={copied ? 'teal' : 'gray'} onClick={copy}>
+                                  {copied ? '✓' : '📋'}
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                          </CopyButton>
+                          <CloseButton size="sm" onClick={() => handleDeleteShareLink(link.code)} />
+                        </MGroup>
+                      </MGroup>
+                    </Paper>
+                  );
+                })}
+              </Stack>
+            </>
           )}
         </Stack>
       </Modal>

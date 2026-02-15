@@ -9,14 +9,21 @@ import type { StoredGroup } from './storage';
 import { getStoredGroups, saveGroup, removeGroup } from './storage';
 import { SyncProvider, useSync } from './sync';
 
-// Extract token from URL hash (used for share links)
+// Extract token from URL hash (used for old-style share links)
 const getTokenFromUrl = (): string | null => {
   const hash = window.location.hash;
   const match = hash.match(/^#token=(.+)$/);
   return match ? match[1] : null;
 };
 
-const clearTokenFromUrl = () => {
+// Extract share code from URL hash (used for new short share links)
+const getShareCodeFromUrl = (): string | null => {
+  const hash = window.location.hash;
+  const match = hash.match(/^#join=([A-Za-z0-9]{16})$/);
+  return match ? match[1] : null;
+};
+
+const clearHashFromUrl = () => {
   window.history.replaceState({}, '', '/');
 };
 
@@ -153,10 +160,13 @@ function AppContent() {
 
   useEffect(() => {
     setStoredGroups(getStoredGroups());
+    const shareCode = getShareCodeFromUrl();
     const urlToken = getTokenFromUrl();
-    if (urlToken) {
-      clearTokenFromUrl();
-      setToken(urlToken);
+    if (shareCode) {
+      clearHashFromUrl();
+      redeemCode(shareCode);
+    } else if (urlToken) {
+      clearHashFromUrl();
       loadGroup(urlToken);
     } else {
       setLoading(false);
@@ -164,6 +174,42 @@ function AppContent() {
     // Prefetch all stored groups in the background for offline access
     api.prefetchAllGroups();
   }, []);
+
+  const redeemCode = async (code: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Check if user already has a token for any group — we'll try each
+      const stored = getStoredGroups();
+      // We don't know the group_id yet, so pass all stored tokens and let the backend figure it out
+      // Actually, just redeem first without existing token to get a token, then merge if needed
+      const resp = await api.redeemShareCode(code);
+      const authToken = resp.token;
+      const groupData = await api.getGroup(authToken);
+      if (groupData) {
+        // Check if user already has a token for this group — merge if so
+        let finalToken = authToken;
+        const existing = stored.find(g => g.id === groupData.id);
+        if (existing) {
+          try {
+            const merged = await api.redeemShareCode(code, existing.token);
+            finalToken = merged.token;
+          } catch {
+            // Merge failed — keep the new token
+          }
+        }
+        setGroup(groupData);
+        setToken(finalToken);
+        saveGroup(groupData.id, groupData.name, finalToken);
+        setStoredGroups(getStoredGroups());
+      } else {
+        setError('Invalid or expired share link');
+      }
+    } catch {
+      setError('Invalid or expired share link');
+    }
+    setLoading(false);
+  };
 
   const loadGroup = async (authToken: string) => {
     setLoading(true);

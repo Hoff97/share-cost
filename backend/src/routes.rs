@@ -6,6 +6,7 @@ use rocket::Route;
 use sqlx;
 use uuid::Uuid;
 use chrono::Utc;
+use rand::Rng;
 
 use crate::auth::{generate_token, validate_token, GroupAuth, Permissions};
 use crate::db;
@@ -682,12 +683,27 @@ fn get_permissions(
     })
 }
 
+/// Generate a random alphanumeric code of the given length.
+/// Uses `rand::rng()` which returns `ThreadRng` — a CSPRNG (ChaCha12 seeded
+/// from the OS). Safe for generating unguessable share codes.
+fn random_code(len: usize) -> String {
+    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut rng = rand::rng();
+    (0..len)
+        .map(|_| {
+            let idx = rng.random_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
+}
+
 // Generate share link with selected permissions (capped by caller's own)
+// Now stores a short code in the DB instead of returning a raw JWT
 #[post("/groups/current/share", data = "<request>")]
-fn generate_share_link(
+async fn generate_share_link(
     auth: GroupAuth,
     request: Json<GenerateShareLinkRequest>,
-) -> Result<Json<ShareLinkResponse>, Status> {
+) -> Result<Json<ShareCodeResponse>, Status> {
     let requested = Permissions {
         can_delete_group:   request.can_delete_group,
         can_manage_members: request.can_manage_members,
@@ -696,17 +712,133 @@ fn generate_share_link(
         can_edit_expenses:  request.can_edit_expenses,
     };
     let effective = requested.cap_by(&auth.permissions);
-    let token = generate_token(auth.group_id, Some(effective.clone()))
+    let pool = db::get_pool();
+
+    let dg = effective.has_delete_group();
+    let mm = effective.has_manage_members();
+    let up = effective.has_update_payment();
+    let ae = effective.has_add_expenses();
+    let ee = effective.has_edit_expenses();
+
+    // Return an existing share link if one already exists with the same group + permissions
+    let existing: Option<String> = sqlx::query_scalar(
+        "SELECT code FROM share_links WHERE group_id = $1 AND can_delete_group = $2 AND can_manage_members = $3 AND can_update_payment = $4 AND can_add_expenses = $5 AND can_edit_expenses = $6 LIMIT 1"
+    )
+    .bind(auth.group_id)
+    .bind(dg)
+    .bind(mm)
+    .bind(up)
+    .bind(ae)
+    .bind(ee)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| { eprintln!("DB error checking existing share link: {}", e); Status::InternalServerError })?;
+
+    if let Some(code) = existing {
+        return Ok(Json(ShareCodeResponse {
+            code,
+            permissions: PermissionsResponse {
+                can_delete_group: dg,
+                can_manage_members: mm,
+                can_update_payment: up,
+                can_add_expenses: ae,
+                can_edit_expenses: ee,
+            },
+        }));
+    }
+
+    // Generate a unique 16-char code (retry on collision)
+    let code = loop {
+        let candidate = random_code(16);
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM share_links WHERE code = $1)"
+        )
+        .bind(&candidate)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| { eprintln!("DB error checking share code: {}", e); Status::InternalServerError })?;
+        if !exists {
+            break candidate;
+        }
+    };
+
+    sqlx::query(
+        "INSERT INTO share_links (code, group_id, can_delete_group, can_manage_members, can_update_payment, can_add_expenses, can_edit_expenses) VALUES ($1, $2, $3, $4, $5, $6, $7)"
+    )
+    .bind(&code)
+    .bind(auth.group_id)
+    .bind(dg)
+    .bind(mm)
+    .bind(up)
+    .bind(ae)
+    .bind(ee)
+    .execute(pool)
+    .await
+    .map_err(|e| { eprintln!("Failed to insert share link: {}", e); Status::InternalServerError })?;
+
+    Ok(Json(ShareCodeResponse {
+        code,
+        permissions: PermissionsResponse {
+            can_delete_group: dg,
+            can_manage_members: mm,
+            can_update_payment: up,
+            can_add_expenses: ae,
+            can_edit_expenses: ee,
+        },
+    }))
+}
+
+// Redeem a short share code → returns a JWT token (no auth required)
+#[post("/share/redeem", data = "<request>")]
+async fn redeem_share_code(
+    request: Json<RedeemShareCodeRequest>,
+) -> Result<Json<ShareLinkResponse>, Status> {
+    let pool = db::get_pool();
+
+    let row = sqlx::query_as::<_, (Uuid, bool, bool, bool, bool, bool)>(
+        "SELECT group_id, can_delete_group, can_manage_members, can_update_payment, can_add_expenses, can_edit_expenses FROM share_links WHERE code = $1"
+    )
+    .bind(&request.code)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| { eprintln!("DB error redeeming share code: {}", e); Status::InternalServerError })?;
+
+    let (group_id, dg, mm, up, ae, ee) = row.ok_or(Status::NotFound)?;
+
+    let link_perms = Permissions {
+        can_delete_group:   Some(dg),
+        can_manage_members: Some(mm),
+        can_update_payment: Some(up),
+        can_add_expenses:   Some(ae),
+        can_edit_expenses:  Some(ee),
+    };
+
+    // If user sent an existing token for the same group, merge permissions
+    let final_perms = if let Some(ref existing) = request.existing_token {
+        if let Ok(claims) = validate_token(existing) {
+            if claims.group_id == group_id {
+                claims.effective_permissions().union_with(&link_perms)
+            } else {
+                link_perms
+            }
+        } else {
+            link_perms
+        }
+    } else {
+        link_perms
+    };
+
+    let token = generate_token(group_id, Some(final_perms.clone()))
         .map_err(|_| Status::InternalServerError)?;
 
     Ok(Json(ShareLinkResponse {
         token,
         permissions: PermissionsResponse {
-            can_delete_group:   effective.has_delete_group(),
-            can_manage_members: effective.has_manage_members(),
-            can_update_payment: effective.has_update_payment(),
-            can_add_expenses:   effective.has_add_expenses(),
-            can_edit_expenses:  effective.has_edit_expenses(),
+            can_delete_group:   final_perms.has_delete_group(),
+            can_manage_members: final_perms.has_manage_members(),
+            can_update_payment: final_perms.has_update_payment(),
+            can_add_expenses:   final_perms.has_add_expenses(),
+            can_edit_expenses:  final_perms.has_edit_expenses(),
         },
     }))
 }
@@ -739,6 +871,55 @@ fn merge_token(
             can_edit_expenses:  merged.has_edit_expenses(),
         },
     }))
+}
+
+// List all share links for the current group (requires all permissions)
+#[get("/groups/current/share-links")]
+async fn list_share_links(
+    auth: GroupAuth,
+) -> Result<Json<Vec<ShareLinkItem>>, Status> {
+    if !auth.permissions.has_all() {
+        return Err(Status::Forbidden);
+    }
+    let pool = db::get_pool();
+    let rows = sqlx::query_as::<_, (String, bool, bool, bool, bool, bool, chrono::DateTime<chrono::Utc>)>(
+        "SELECT code, can_delete_group, can_manage_members, can_update_payment, can_add_expenses, can_edit_expenses, created_at FROM share_links WHERE group_id = $1 ORDER BY created_at DESC"
+    )
+    .bind(auth.group_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| { eprintln!("DB error listing share links: {}", e); Status::InternalServerError })?;
+
+    let items: Vec<ShareLinkItem> = rows.into_iter().map(|(code, dg, mm, up, ae, ee, created_at)| {
+        ShareLinkItem { code, can_delete_group: dg, can_manage_members: mm, can_update_payment: up, can_add_expenses: ae, can_edit_expenses: ee, created_at: created_at.to_rfc3339() }
+    }).collect();
+
+    Ok(Json(items))
+}
+
+// Delete a share link by code (requires all permissions)
+#[delete("/groups/current/share-links/<code>")]
+async fn delete_share_link(
+    auth: GroupAuth,
+    code: &str,
+) -> Result<Status, Status> {
+    if !auth.permissions.has_all() {
+        return Err(Status::Forbidden);
+    }
+    let pool = db::get_pool();
+    let result = sqlx::query(
+        "DELETE FROM share_links WHERE code = $1 AND group_id = $2"
+    )
+    .bind(code)
+    .bind(auth.group_id)
+    .execute(pool)
+    .await
+    .map_err(|e| { eprintln!("DB error deleting share link: {}", e); Status::InternalServerError })?;
+
+    if result.rows_affected() == 0 {
+        return Err(Status::NotFound);
+    }
+    Ok(Status::NoContent)
 }
 
 // Delete group - requires valid JWT + delete_group permission
@@ -795,6 +976,9 @@ pub fn get_routes() -> Vec<Route> {
         delete_expense,
         get_balances,
         generate_share_link,
+        list_share_links,
+        delete_share_link,
+        redeem_share_code,
         merge_token,
         delete_group
     ]

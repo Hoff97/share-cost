@@ -54,6 +54,21 @@ export interface ShareLinkResponse {
   permissions: Permissions;
 }
 
+export interface ShareCodeResponse {
+  code: string;
+  permissions: Permissions;
+}
+
+export interface ShareLinkItem {
+  code: string;
+  can_delete_group: boolean;
+  can_manage_members: boolean;
+  can_update_payment: boolean;
+  can_add_expenses: boolean;
+  can_edit_expenses: boolean;
+  created_at: string;
+}
+
 // Helper to get auth headers
 const authHeaders = (token: string): HeadersInit => ({
   'Content-Type': 'application/json',
@@ -209,16 +224,30 @@ export const getPermissions = async (token: string): Promise<Permissions> => {
   return res.json();
 };
 
-// Generate a share link with selected permissions
+// Generate a share link with selected permissions (returns a short code)
 export const generateShareLink = async (
   token: string,
   permissions: Partial<Permissions>
-): Promise<ShareLinkResponse> => {
+): Promise<ShareCodeResponse> => {
   const res = await fetch(`${API_BASE}/groups/current/share`, {
     method: 'POST',
     headers: authHeaders(token),
     body: JSON.stringify(permissions),
   });
+  return res.json();
+};
+
+// Redeem a share code for a JWT token (no auth required)
+export const redeemShareCode = async (
+  code: string,
+  existingToken?: string
+): Promise<ShareLinkResponse> => {
+  const res = await fetch(`${API_BASE}/share/redeem`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, existing_token: existingToken ?? null }),
+  });
+  if (!res.ok) throw new Error('Invalid or expired share code');
   return res.json();
 };
 
@@ -234,6 +263,23 @@ export const mergeToken = async (
   });
   if (!res.ok) throw new Error('Failed to merge tokens');
   return res.json();
+};
+
+// List all share links for the current group
+export const listShareLinks = async (token: string): Promise<ShareLinkItem[]> => {
+  const res = await fetch(`${API_BASE}/groups/current/share-links`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) return [];
+  return res.json();
+};
+
+// Delete a share link by code
+export const deleteShareLink = async (token: string, code: string): Promise<void> => {
+  await fetch(`${API_BASE}/groups/current/share-links/${code}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
 };
 
 // Delete group

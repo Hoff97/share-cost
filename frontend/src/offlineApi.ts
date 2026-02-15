@@ -2,7 +2,7 @@
 // for reads, and queues mutations for later sync when offline.
 
 import * as api from './api';
-import type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse } from './api';
+import type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse, ShareCodeResponse, ShareLinkItem } from './api';
 import {
   cacheGroup, getCachedGroup,
   cacheExpenses, getCachedExpenses,
@@ -12,7 +12,7 @@ import {
 import { getStoredGroups } from './storage';
 
 // Re-export all types so components can import from here
-export type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse };
+export type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse, ShareCodeResponse, ShareLinkItem };
 
 /** Returns true for expenses created offline that haven't been synced yet */
 export function isPending(expense: Expense): boolean {
@@ -267,12 +267,24 @@ export async function getPermissions(token: string): Promise<Permissions> {
 export async function generateShareLink(
   token: string,
   permissions: Partial<Permissions>,
-): Promise<ShareLinkResponse> {
+): Promise<ShareCodeResponse> {
   return api.generateShareLink(token, permissions);
+}
+
+export async function redeemShareCode(code: string, existingToken?: string): Promise<ShareLinkResponse> {
+  return api.redeemShareCode(code, existingToken);
 }
 
 export async function mergeToken(token: string, otherToken: string): Promise<ShareLinkResponse> {
   return api.mergeToken(token, otherToken);
+}
+
+export async function listShareLinks(token: string): Promise<ShareLinkItem[]> {
+  return api.listShareLinks(token);
+}
+
+export async function deleteShareLink(token: string, code: string): Promise<void> {
+  return api.deleteShareLink(token, code);
 }
 
 export async function deleteGroup(token: string): Promise<void> {

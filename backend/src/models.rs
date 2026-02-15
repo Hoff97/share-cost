@@ -166,6 +166,33 @@ pub struct ShareLinkResponse {
     pub permissions: PermissionsResponse,
 }
 
+/// Response containing the generated short share code and its effective permissions.
+#[derive(Debug, Serialize)]
+pub struct ShareCodeResponse {
+    pub code: String,
+    pub permissions: PermissionsResponse,
+}
+
+/// A share link entry for listing existing links.
+#[derive(Debug, Serialize)]
+pub struct ShareLinkItem {
+    pub code: String,
+    pub can_delete_group: bool,
+    pub can_manage_members: bool,
+    pub can_update_payment: bool,
+    pub can_add_expenses: bool,
+    pub can_edit_expenses: bool,
+    pub created_at: String,
+}
+
+/// Request to redeem a share code for a JWT token.
+#[derive(Debug, Deserialize)]
+pub struct RedeemShareCodeRequest {
+    pub code: String,
+    /// If the user already has a token for this group, send it to merge permissions.
+    pub existing_token: Option<String>,
+}
+
 /// Request to merge an existing token with the current one.
 #[derive(Debug, Deserialize)]
 pub struct MergeTokenRequest {
