@@ -45,13 +45,13 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
       <Title order={4}>Your Groups</Title>
 
       {currencyEntries.length > 0 && (
-        <Paper p="sm" radius="md" bg="gray.0">
+        <Paper p="sm" radius="md" bg="light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))">
           {currencyEntries.map(([cur, total]) => (
             <MGroup key={cur} justify="space-between">
-              <Text fw={600} c={total >= 0 ? 'green.8' : 'red.8'}>
+              <Text fw={600} c={total >= 0 ? 'green' : 'red'}>
                 {currencyEntries.length > 1 ? `Balance (${cur}):` : 'Total Balance:'}
               </Text>
-              <Text fw={700} size="lg" c={total >= 0 ? 'green.8' : 'red.8'}>
+              <Text fw={700} size="lg" c={total >= 0 ? 'green' : 'red'}>
                 {fmtAmt(total, cur)}
               </Text>
             </MGroup>
@@ -82,7 +82,7 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
             {group.cachedBalance !== undefined && (
               <Badge
                 size="lg"
-                variant="light"
+                variant="filled"
                 color={group.cachedBalance >= 0 ? 'green' : 'red'}
               >
                 {fmtAmt(group.cachedBalance, group.cachedCurrency)}

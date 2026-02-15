@@ -5,9 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#228be6" />
+    <meta name="theme-color" content="#228be6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1a1b1e" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Split expenses with friends and groups" />
     <title>Share Cost</title>
+    <script>try{var d=localStorage.getItem('mantine-color-scheme-value');if(d==='dark'||(d!=='light'&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.setAttribute('data-mantine-color-scheme','dark')}catch(e){}</script>
   </head>
   <body>
     <div id="root"></div>

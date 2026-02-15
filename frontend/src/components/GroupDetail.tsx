@@ -569,7 +569,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                 <Badge
                   size="lg"
                   color={myBalance.balance >= 0 ? 'green' : 'red'}
-                  variant="light"
+                  variant="filled"
                 >
                   {myBalance.balance >= 0 ? '+' : ''}{fmtAmt(myBalance.balance, group.currency)}
                 </Badge>
@@ -758,10 +758,10 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   style={{
                     borderLeftWidth: 4,
                     borderLeftColor: expense.expense_type === 'transfer'
-                      ? 'var(--mantine-color-green-5)'
+                      ? 'var(--mantine-color-green-6)'
                       : expense.expense_type === 'income'
-                      ? 'var(--mantine-color-yellow-5)'
-                      : 'var(--mantine-color-blue-5)',
+                      ? 'var(--mantine-color-yellow-6)'
+                      : 'var(--mantine-color-blue-6)',
                   }}
                 >
                   {editingExpenseId === expense.id ? (
@@ -938,7 +938,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
         <Tabs.Panel value="balances" pt="md">
           <Stack gap="xs">
             {settlements.length > 0 && (
-              <Paper p="sm" radius="md" bg="gray.0" mb="xs">
+              <Paper p="sm" radius="md" bg="light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))" mb="xs">
                 <Text size="sm" c="dimmed" ta="center">
                   {settlements.length} transfer{settlements.length !== 1 ? 's' : ''} needed to settle all debts
                 </Text>
@@ -958,9 +958,9 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   style={{
                     cursor: hasSettlements ? 'pointer' : undefined,
                     ...(balance.user_id === selectedMemberId ? {
-                      borderColor: 'var(--mantine-color-blue-5)',
+                      borderColor: 'var(--mantine-color-blue-6)',
                       borderWidth: 2,
-                      background: 'var(--mantine-color-blue-0)',
+                      background: 'light-dark(var(--mantine-color-blue-0), var(--mantine-color-blue-9))',
                     } : {}),
                   }}
                   onClick={() => hasSettlements && toggleBalanceExpanded(balance.user_id)}
@@ -975,7 +975,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       <Text fw={600}>
                         {balance.user_name}
                         {balance.user_id === selectedMemberId && (
-                          <Text component="span" c="blue" fw={500}> (you)</Text>
+                          <Text component="span" c="light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-3))" fw={500}> (you)</Text>
                         )}
                       </Text>
                     </MGroup>
@@ -997,9 +997,11 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                             </MGroup>
                             {recipient?.paypal_email && (
                               <MGroup gap="xs" ml="md" mt={2}>
-                                <Badge size="xs" color="blue" variant="light">PayPal</Badge>
+                                <Badge size="xs" color="indigo" variant="filled">PayPal</Badge>
                                 <Anchor
                                   size="xs"
+                                  fw={600}
+                                  style={{ color: 'var(--mantine-color-indigo-4)' }}
                                   href={`https://paypal.me/${recipient.paypal_email}/${o.amount.toFixed(2).replace('.', ',')}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -1135,20 +1137,20 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                 radius="md"
                 withBorder
                 style={member.id === selectedMemberId ? {
-                  borderColor: 'var(--mantine-color-blue-5)',
+                  borderColor: 'var(--mantine-color-blue-6)',
                   borderWidth: 2,
-                  background: 'var(--mantine-color-blue-0)',
+                  background: 'light-dark(var(--mantine-color-blue-0), var(--mantine-color-blue-9))',
                 } : undefined}
               >
                 <MGroup justify="space-between" align="center">
                   <Text fw={600}>
                     {member.name}
                     {member.id === selectedMemberId && (
-                      <Text component="span" c="blue" fw={500}> (you)</Text>
+                      <Text component="span" c="light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-3))" fw={500}> (you)</Text>
                     )}
                   </Text>
                   <MGroup gap="xs">
-                    {member.paypal_email && <Badge size="xs" color="blue" variant="light">PayPal</Badge>}
+                    {member.paypal_email && <Badge size="xs" color="indigo" variant="light">PayPal</Badge>}
                     {member.iban && <Badge size="xs" color="gray" variant="light">IBAN</Badge>}
                     {editingPayment !== member.id && permissions.can_update_payment && (
                       <Button size="compact-xs" variant="subtle" onClick={() => handleStartEditPayment(member)}>
@@ -1187,7 +1189,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                     <Divider my="xs" />
                     <Stack gap={2}>
                       {member.paypal_email && (
-                        <Text size="xs" c="dimmed">PayPal: <Anchor href={`https://paypal.me/${member.paypal_email}`} target="_blank" rel="noopener noreferrer">{member.paypal_email}</Anchor></Text>
+                        <Text size="xs" c="dimmed">PayPal: <Anchor style={{ color: 'var(--mantine-color-indigo-4)' }} href={`https://paypal.me/${member.paypal_email}`} target="_blank" rel="noopener noreferrer">{member.paypal_email}</Anchor></Text>
                       )}
                       {member.iban && (
                         <MGroup gap="xs">

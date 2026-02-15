@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge, CloseButton } from '@mantine/core';
+import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge, CloseButton, ActionIcon, useMantineColorScheme, useComputedColorScheme } from '@mantine/core';
 import * as api from './offlineApi';
 import type { Group } from './offlineApi';
 import { CreateGroup } from './components/CreateGroup';
@@ -19,6 +19,21 @@ const getTokenFromUrl = (): string | null => {
 const clearTokenFromUrl = () => {
   window.history.replaceState({}, '', '/');
 };
+
+function DarkModeToggle() {
+  const { setColorScheme } = useMantineColorScheme();
+  const computedScheme = useComputedColorScheme('light');
+  return (
+    <ActionIcon
+      variant="default"
+      size="lg"
+      onClick={() => setColorScheme(computedScheme === 'dark' ? 'light' : 'dark')}
+      aria-label="Toggle dark mode"
+    >
+      {computedScheme === 'dark' ? '☀️' : '🌙'}
+    </ActionIcon>
+  );
+}
 
 function SyncStatus() {
   const { isOnline, pendingCount, syncing } = useSync();
@@ -93,7 +108,7 @@ function InstallBanner() {
   if (deferredPrompt) {
     return (
       <Paper shadow="sm" p="sm" radius="md" withBorder mb="md"
-        style={{ background: 'var(--mantine-color-blue-0)', position: 'relative' }}>
+        style={{ background: 'light-dark(var(--mantine-color-blue-0), var(--mantine-color-blue-9))', position: 'relative' }}>
         <CloseButton size="sm" style={{ position: 'absolute', top: 8, right: 8 }} onClick={handleDismiss} />
         <MGroup gap="sm" align="center" pr={24}>
           <Text size="lg">📲</Text>
@@ -110,7 +125,7 @@ function InstallBanner() {
   if (showIosHint) {
     return (
       <Paper shadow="sm" p="sm" radius="md" withBorder mb="md"
-        style={{ background: 'var(--mantine-color-blue-0)', position: 'relative' }}>
+        style={{ background: 'light-dark(var(--mantine-color-blue-0), var(--mantine-color-blue-9))', position: 'relative' }}>
         <CloseButton size="sm" style={{ position: 'absolute', top: 8, right: 8 }} onClick={handleDismiss} />
         <MGroup gap="sm" align="center" pr={24}>
           <Text size="lg">📲</Text>
@@ -216,12 +231,13 @@ function AppContent() {
   if (loading) {
     return (
       <Container size="sm" py="xl">
-        <Stack align="center" gap="md">
+        <MGroup justify="space-between" align="center" mb="md">
           <Title order={1}>💰 Share Cost</Title>
-          <Center py="xl">
-            <Loader size="lg" />
-          </Center>
-        </Stack>
+          <DarkModeToggle />
+        </MGroup>
+        <Center py="xl">
+          <Loader size="lg" />
+        </Center>
       </Container>
     );
   }
@@ -229,8 +245,11 @@ function AppContent() {
   if (error) {
     return (
       <Container size="sm" py="xl">
-        <Stack align="center" gap="md">
+        <MGroup justify="space-between" align="center" mb="md">
           <Title order={1}>💰 Share Cost</Title>
+          <DarkModeToggle />
+        </MGroup>
+        <Stack align="center" gap="md">
           <Alert color="red" title="Error" w="100%">
             {error}
           </Alert>
@@ -247,6 +266,7 @@ function AppContent() {
       <Container size="sm" py="xl">
         <MGroup justify="space-between" align="center" mb="lg">
           <Title order={1} style={{ cursor: 'pointer' }} onClick={handleBackToList}>💰 Share Cost</Title>
+          <DarkModeToggle />
         </MGroup>
         <GroupDetail
           group={group}
@@ -260,10 +280,11 @@ function AppContent() {
 
   return (
     <Container size="sm" py="xl">
-      <Stack align="center" gap="md">
+      <MGroup justify="space-between" align="center" mb="md">
         <Title order={1}>💰 Share Cost</Title>
-        <Text c="dimmed">Split expenses with friends, no sign-up required</Text>
-      </Stack>
+        <DarkModeToggle />
+      </MGroup>
+      <Text c="dimmed" ta="center">Split expenses with friends, no sign-up required</Text>
       <InstallBanner />
       {showCreate ? (
         <CreateGroup
