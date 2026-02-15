@@ -16,7 +16,10 @@ export default defineConfig({
         theme_color: '#228be6',
         background_color: '#ffffff',
         display: 'standalone',
+        id: '/',
         start_url: '/',
+        scope: '/',
+        categories: ['finance', 'utilities'],
         icons: [
           {
             src: 'icon-192.png',

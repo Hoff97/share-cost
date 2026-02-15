@@ -9,8 +9,16 @@ mod routes;
 use rocket::http::Method;
 use rocket::fairing::AdHoc;
 use rocket::fs::NamedFile;
+use rocket::http::ContentType;
 use rocket_cors::{AllowedHeaders, AllowedOrigins, CorsOptions};
 use std::path::{Path, PathBuf};
+
+// Serve the PWA manifest with the correct Content-Type (Rocket doesn't know .webmanifest)
+#[get("/manifest.webmanifest", rank = 5)]
+async fn manifest() -> Option<(ContentType, Vec<u8>)> {
+    let bytes = rocket::tokio::fs::read("static/manifest.webmanifest").await.ok()?;
+    Some((ContentType::new("application", "manifest+json"), bytes))
+}
 
 // SPA fallback: serve index.html for any route not matched by API or static files
 #[get("/<_path..>", rank = 100)]
@@ -55,7 +63,7 @@ fn rocket() -> _ {
             Ok(rocket)
         }))
         .mount("/api", routes::get_routes())
-        .mount("/", routes![index, spa_fallback])
+        .mount("/", routes![manifest, index, spa_fallback])
         .attach(AdHoc::on_ignite("Static Files", |rocket| async {
             if Path::new("static").is_dir() {
                 rocket.mount("/", rocket::fs::FileServer::from("static").rank(10))
