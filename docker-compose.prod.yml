@@ -1,6 +1,6 @@
 services:
   app:
-    build: .
+    image: ghcr.io/hoff97/share-cost:latest
     container_name: share_cost_app
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/share_cost
@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
 
   nginx:
-    build: ./nginx
+    image: ghcr.io/hoff97/share-cost/nginx:latest
     container_name: share_cost_nginx
     ports:
       - "80:80"
@@ -32,7 +32,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: share_cost
-    # No ports exposed — only reachable by the app service on the internal network
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
