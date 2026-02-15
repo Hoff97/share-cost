@@ -116,12 +116,7 @@ function App() {
     return (
       <Container size="sm" py="xl">
         <MGroup justify="space-between" align="center" mb="lg">
-          <Title order={1}>💰 Share Cost</Title>
-          {storedGroups.length > 0 && (
-            <Button variant="subtle" onClick={handleBackToList}>
-              ← All Groups
-            </Button>
-          )}
+          <Title order={1} style={{ cursor: 'pointer' }} onClick={handleBackToList}>💰 Share Cost</Title>
         </MGroup>
         <GroupDetail
           group={group}

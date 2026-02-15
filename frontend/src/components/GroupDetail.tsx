@@ -22,18 +22,8 @@ const formatDate = (iso: string) => {
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y}`;
 };
-// Date object → YYYY-MM-DD string for API
-const dateToIso = (d: Date) => {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-// YYYY-MM-DD string → Date object
-const isoToDate = (iso: string) => {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d);
-};
+// Today as YYYY-MM-DD
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 // Currency helpers
 const CURRENCIES = [
@@ -72,7 +62,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [splitBetween, setSplitBetween] = useState<string[]>(() => group.members.map(m => m.id));
   const [expenseType, setExpenseType] = useState('expense');
   const [transferTo, setTransferTo] = useState<string | null>(null);
-  const [expenseDate, setExpenseDate] = useState<Date | null>(new Date());
+  const [expenseDate, setExpenseDate] = useState<string | null>(todayIso());
   const [newMemberName, setNewMemberName] = useState('');
   const [editingPayment, setEditingPayment] = useState<string | null>(null);
   const [editPaypal, setEditPaypal] = useState('');
@@ -84,7 +74,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   const [editSplitBetween, setEditSplitBetween] = useState<string[]>([]);
   const [editExpenseType, setEditExpenseType] = useState('expense');
   const [editTransferTo, setEditTransferTo] = useState<string | null>(null);
-  const [editExpenseDate, setEditExpenseDate] = useState<Date | null>(null);
+  const [editExpenseDate, setEditExpenseDate] = useState<string | null>(null);
   const [expenseCurrency, setExpenseCurrency] = useState(group.currency);
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [editExpenseCurrency, setEditExpenseCurrency] = useState('');
@@ -118,9 +108,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   useEffect(() => {
     if (expenseCurrency === group.currency) { setExchangeRate(1); return; }
     if (!expenseDate) return;
-    const iso = dateToIso(expenseDate);
     let cancelled = false;
-    fetchRate(expenseCurrency, group.currency, iso).then(rate => {
+    fetchRate(expenseCurrency, group.currency, expenseDate).then(rate => {
       if (!cancelled && rate !== null) setExchangeRate(rate);
     });
     return () => { cancelled = true; };
@@ -130,9 +119,8 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
   useEffect(() => {
     if (!editingExpenseId || editExpenseCurrency === group.currency) return;
     if (!editExpenseDate) return;
-    const iso = dateToIso(editExpenseDate);
     let cancelled = false;
-    fetchRate(editExpenseCurrency, group.currency, iso).then(rate => {
+    fetchRate(editExpenseCurrency, group.currency, editExpenseDate).then(rate => {
       if (!cancelled && rate !== null) setEditExchangeRate(rate);
     });
     return () => { cancelled = true; };
@@ -152,7 +140,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       splitBetween,
       expenseType,
       expenseType === 'transfer' ? (transferTo ?? undefined) : undefined,
-      expenseDate ? dateToIso(expenseDate) : dateToIso(new Date()),
+      expenseDate || todayIso(),
       expenseCurrency,
       exchangeRate
     );
@@ -163,7 +151,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setSplitBetween(allMemberIds);
     setExpenseType('expense');
     setTransferTo(null);
-    setExpenseDate(new Date());
+    setExpenseDate(todayIso());
     setExpenseCurrency(group.currency);
     setExchangeRate(1);
     loadData();
@@ -253,7 +241,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
     setEditSplitBetween(expense.split_between);
     setEditExpenseType(expense.expense_type);
     setEditTransferTo(expense.transfer_to);
-    setEditExpenseDate(isoToDate(expense.expense_date));
+    setEditExpenseDate(expense.expense_date);
     setEditExpenseCurrency(expense.currency);
     setEditExchangeRate(expense.exchange_rate);
   };
@@ -276,7 +264,7 @@ export function GroupDetail({ group, token, onGroupUpdated }: GroupDetailProps) 
       editSplitBetween,
       editExpenseType,
       editExpenseType === 'transfer' ? (editTransferTo ?? undefined) : undefined,
-      editExpenseDate ? dateToIso(editExpenseDate) : dateToIso(new Date()),
+      editExpenseDate || todayIso(),
       editExpenseCurrency,
       editExchangeRate
     );
