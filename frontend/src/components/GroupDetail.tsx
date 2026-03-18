@@ -10,7 +10,7 @@ import { DatePickerInput } from '@mantine/dates';
 import { QRCodeSVG } from 'qrcode.react';
 import 'dayjs/locale/de';
 import * as api from '../offlineApi';
-import type { Group, Expense, Balance, Permissions, ShareLinkItem, SplitEntry } from '../offlineApi';
+import type { Group, Expense, Balance, Permissions, ShareLinkItem } from '../offlineApi';
 import { isPending } from '../offlineApi';
 import { useSync } from '../sync';
 import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
