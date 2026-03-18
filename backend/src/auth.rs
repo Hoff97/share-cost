@@ -111,7 +111,6 @@ pub struct GroupAuth {
 pub enum AuthError {
     Missing,
     Invalid,
-    Forbidden,
 }
 
 #[rocket::async_trait]

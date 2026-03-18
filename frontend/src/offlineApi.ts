@@ -9,7 +9,7 @@ import {
   cacheBalances, getCachedBalances,
   enqueueMutation,
 } from './offlineDb';
-import { getStoredGroups } from './storage';
+import { getStoredGroups, updateCachedBalance, updateLatestActivity } from './storage';
 
 // Re-export all types so components can import from here
 export type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse, ShareCodeResponse, ShareLinkItem, SplitEntry };
@@ -73,6 +73,24 @@ export async function prefetchAllGroups(): Promise<void> {
           ]);
           await cacheExpenses(group.id, expenses);
           await cacheBalances(group.id, balances);
+
+          // Update cached balance for the user's selected member
+          if (sg.selectedMemberId) {
+            const myBalance = balances.find(b => b.user_id === sg.selectedMemberId);
+            if (myBalance !== undefined) {
+              updateCachedBalance(group.id, myBalance.balance, group.currency);
+            }
+          }
+
+          // Track latest activity timestamp and count new transactions
+          if (expenses.length > 0) {
+            const latestAt = expenses.reduce((max, e) =>
+              e.created_at > max ? e.created_at : max, expenses[0].created_at);
+            const newCount = sg.lastCheckedAt
+              ? expenses.filter(e => e.created_at > sg.lastCheckedAt!).length
+              : 0;
+            updateLatestActivity(group.id, latestAt, newCount);
+          }
         }
       } catch {
         // Already cached or truly unreachable — either way, skip

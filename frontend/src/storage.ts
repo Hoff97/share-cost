@@ -11,6 +11,9 @@ export interface StoredGroup {
   selectedMemberName?: string;
   cachedBalance?: number;
   cachedCurrency?: string;
+  lastCheckedAt?: string;
+  latestActivityAt?: string;
+  newActivityCount?: number;
 }
 
 export const getStoredGroups = (): StoredGroup[] => {
@@ -83,6 +86,25 @@ export const updateCachedBalance = (groupId: string, balance: number, currency?:
 
 export const getStoredGroup = (groupId: string): StoredGroup | undefined => {
   return getStoredGroups().find(g => g.id === groupId);
+};
+
+export const updateLastCheckedAt = (groupId: string): void => {
+  const groups = getStoredGroups();
+  const group = groups.find(g => g.id === groupId);
+  if (group) {
+    group.lastCheckedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+  }
+};
+
+export const updateLatestActivity = (groupId: string, latestAt: string, newCount?: number): void => {
+  const groups = getStoredGroups();
+  const group = groups.find(g => g.id === groupId);
+  if (group) {
+    group.latestActivityAt = latestAt;
+    if (newCount !== undefined) group.newActivityCount = newCount;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+  }
 };
 
 // Personal payment info stored in browser

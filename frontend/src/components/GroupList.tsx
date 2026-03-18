@@ -59,7 +59,12 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
         </Paper>
       )}
 
-      {groups.map(group => (
+      {groups.map(group => {
+        const hasNewActivity = !!(
+          group.latestActivityAt &&
+          (!group.lastCheckedAt || group.latestActivityAt > group.lastCheckedAt)
+        );
+        return (
         <Card
           key={group.id}
           padding="sm"
@@ -72,7 +77,14 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
         >
           <MGroup justify="space-between" wrap="nowrap">
             <div style={{ flex: 1 }}>
-              <Text fw={500}>{group.name}</Text>
+              <MGroup gap="xs" align="center">
+                <Text fw={500}>{group.name}</Text>
+                {hasNewActivity && (
+                  <Badge size="xs" variant="filled" color="blue">
+                    {group.newActivityCount ? `${group.newActivityCount} new` : 'new'}
+                  </Badge>
+                )}
+              </MGroup>
               <Text size="xs" c="dimmed">
                 {group.selectedMemberName
                   ? `You: ${group.selectedMemberName}`
@@ -98,7 +110,8 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
             </ActionIcon>
           </MGroup>
         </Card>
-      ))}
+        );
+      })}
     </Stack>
   );
 };

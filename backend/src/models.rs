@@ -14,6 +14,7 @@ pub struct GroupRow {
 }
 
 #[derive(Debug, Clone, FromRow)]
+#[allow(dead_code)]
 pub struct MemberRow {
     pub id: Uuid,
     pub group_id: Uuid,
@@ -43,13 +44,6 @@ pub struct ExpenseRow {
 pub struct ExpenseSplitMemberRow {
     pub member_id: Uuid,
     pub share: Option<BigDecimal>,
-}
-
-#[derive(Debug, Clone, FromRow)]
-pub struct ExpenseSplitRow {
-    pub id: Uuid,
-    pub expense_id: Uuid,
-    pub member_id: Uuid,
 }
 
 // API response types

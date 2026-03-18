@@ -6,7 +6,7 @@ import { CreateGroup } from './components/CreateGroup';
 import { GroupDetail } from './components/GroupDetail';
 import { GroupList } from './components/GroupList';
 import type { StoredGroup } from './storage';
-import { getStoredGroups, saveGroup, removeGroup } from './storage';
+import { getStoredGroups, saveGroup, removeGroup, updateLastCheckedAt } from './storage';
 import { SyncProvider, useSync } from './sync';
 
 // Extract token from URL hash (used for old-style share links)
@@ -172,7 +172,7 @@ function AppContent() {
       setLoading(false);
     }
     // Prefetch all stored groups in the background for offline access
-    api.prefetchAllGroups();
+    api.prefetchAllGroups().then(() => setStoredGroups(getStoredGroups()));
   }, []);
 
   const redeemCode = async (code: string) => {
@@ -250,6 +250,9 @@ function AppContent() {
   };
 
   const handleSelectGroup = (groupToken: string) => {
+    // Mark the group as checked when user opens it
+    const sg = getStoredGroups().find(g => g.token === groupToken);
+    if (sg) updateLastCheckedAt(sg.id);
     setToken(groupToken);
     loadGroup(groupToken);
   };
