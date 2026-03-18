@@ -71,20 +71,35 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
           radius="md"
           withBorder
           onClick={() => onSelectGroup(group.token)}
-          style={{ cursor: 'pointer', transition: 'transform 0.1s' }}
+          style={{ cursor: 'pointer', transition: 'transform 0.1s', position: 'relative', overflow: 'visible' }}
           onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateX(4px)')}
           onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
         >
+          {hasNewActivity && (
+            <div style={{
+              position: 'absolute',
+              top: -6,
+              left: -6,
+              background: 'var(--mantine-color-blue-6)',
+              color: 'white',
+              borderRadius: '999px',
+              minWidth: 20,
+              height: 20,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 11,
+              fontWeight: 700,
+              padding: '0 5px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              zIndex: 1,
+            }}>
+              {group.newActivityCount || '!'}
+            </div>
+          )}
           <MGroup justify="space-between" wrap="nowrap">
-            <div style={{ flex: 1 }}>
-              <MGroup gap="xs" align="center">
-                <Text fw={500}>{group.name}</Text>
-                {hasNewActivity && (
-                  <Badge size="xs" variant="filled" color="blue">
-                    {group.newActivityCount ? `${group.newActivityCount} new` : 'new'}
-                  </Badge>
-                )}
-              </MGroup>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Text fw={500} truncate>{group.name}</Text>
               <Text size="xs" c="dimmed">
                 {group.selectedMemberName
                   ? `You: ${group.selectedMemberName}`
