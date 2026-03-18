@@ -108,6 +108,8 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   });
   const [generatedShareUrl, setGeneratedShareUrl] = useState<string | null>(null);
   const [existingShareLinks, setExistingShareLinks] = useState<ShareLinkItem[]>([]);
+  const [editingGroupName, setEditingGroupName] = useState(false);
+  const [editGroupNameValue, setEditGroupNameValue] = useState('');
 
   const loadData = useCallback(async () => {
     const [expensesData, balancesData, permsData] = await Promise.all([
@@ -283,6 +285,18 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     }
   };
 
+  const handleSaveGroupName = async () => {
+    const trimmed = editGroupNameValue.trim();
+    if (!trimmed) return;
+    try {
+      await api.renameGroup(token, trimmed);
+      setEditingGroupName(false);
+      onGroupUpdated();
+    } catch {
+      alert('Failed to rename group.');
+    }
+  };
+
   const handleSelectMember = async (memberId: string) => {
     const member = group.members.find(m => m.id === memberId);
     if (member) {
@@ -378,6 +392,16 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
 
   const [addEntryOpened, { toggle: toggleAddEntry, close: closeAddEntry }] = useDisclosure(false);
   const [expandedBalances, setExpandedBalances] = useState<Set<string>>(new Set());
+  const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
+
+  const toggleExpenseExpanded = (expenseId: string) => {
+    setExpandedExpenses(prev => {
+      const next = new Set(prev);
+      if (next.has(expenseId)) next.delete(expenseId);
+      else next.add(expenseId);
+      return next;
+    });
+  };
   const [crossGroupTransfer, setCrossGroupTransfer] = useState<{
     fromId: string; fromName: string; toId: string; toName: string; amount: number;
     targetGroupId: string | null; targetGroupToken: string | null; targetGroupName: string | null;
@@ -572,7 +596,37 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     <Stack gap="lg">
       {/* Header */}
       <MGroup justify="space-between" align="center" wrap="wrap">
-        <Title order={2}>{group.name}</Title>
+        {editingGroupName ? (
+          <MGroup gap={4}>
+            <TextInput
+              value={editGroupNameValue}
+              onChange={(e) => setEditGroupNameValue(e.target.value)}
+              size="xs"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveGroupName();
+                if (e.key === 'Escape') setEditingGroupName(false);
+              }}
+              styles={{ input: { fontWeight: 700 } }}
+              w={140}
+            />
+            <ActionIcon size="sm" variant="light" color="blue" onClick={handleSaveGroupName}>
+              <Text size="xs">✓</Text>
+            </ActionIcon>
+            <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => setEditingGroupName(false)}>
+              <Text size="xs">✕</Text>
+            </ActionIcon>
+          </MGroup>
+        ) : (
+          <MGroup gap="xs">
+            <Title order={2}>{group.name}</Title>
+            {permissions.can_delete_group && (
+              <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => { setEditGroupNameValue(group.name); setEditingGroupName(true); }}>
+                <Text size="xs">✏️</Text>
+              </ActionIcon>
+            )}
+          </MGroup>
+        )}
         <MGroup gap="sm">
           {selectedMemberId ? (
             <MGroup gap="xs">
@@ -902,49 +956,88 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   ) : (
                     /* Display mode */
                     <>
-                      <MGroup justify="space-between" align="center" mb={4}>
-                        <MGroup gap="xs">
-                          {isPending(expense) && (
-                            <Badge size="sm" color="orange" variant="light">⏳ Pending</Badge>
-                          )}
-                          {expense.expense_type === 'transfer' && (
-                            <Badge size="sm" color="green" variant="light">💸 Transfer</Badge>
-                          )}
-                          {expense.expense_type === 'income' && (
-                            <Badge size="sm" color="yellow" variant="light">💰 Income</Badge>
-                          )}
-                          <Text fw={600}>{expense.description}</Text>
+                      <div style={{ cursor: 'pointer' }} onClick={() => toggleExpenseExpanded(expense.id)}>
+                        <MGroup justify="space-between" align="center" mb={4}>
+                          <MGroup gap="xs">
+                            {isPending(expense) && (
+                              <Badge size="sm" color="orange" variant="light">⏳ Pending</Badge>
+                            )}
+                            {expense.expense_type === 'transfer' && (
+                              <Badge size="sm" color="green" variant="light">💸 Transfer</Badge>
+                            )}
+                            {expense.expense_type === 'income' && (
+                              <Badge size="sm" color="yellow" variant="light">💰 Income</Badge>
+                            )}
+                            <Text fw={600}>{expense.description}</Text>
+                          </MGroup>
+                          <MGroup gap={4} align="baseline">
+                            <Text fw={700} c="blue" size="lg">{fmtAmt(expense.amount, expense.currency)}</Text>
+                            {expense.currency !== group.currency && (
+                              <Text size="xs" c="dimmed">≈ {fmtAmt(expense.amount * expense.exchange_rate, group.currency)}</Text>
+                            )}
+                            {!isPending(expense) && permissions.can_edit_expenses && (
+                              <>
+                                <ActionIcon size="sm" variant="subtle" color="gray" onClick={(e) => { e.stopPropagation(); handleStartEditExpense(expense); }}>
+                                  <Text size="xs">✏️</Text>
+                                </ActionIcon>
+                                <ActionIcon size="sm" variant="subtle" color="red" onClick={(e) => { e.stopPropagation(); handleDeleteExpense(expense.id); }}>
+                                  <Text size="xs">🗑️</Text>
+                                </ActionIcon>
+                              </>
+                            )}
+                          </MGroup>
                         </MGroup>
-                        <MGroup gap={4} align="baseline">
-                          <Text fw={700} c="blue" size="lg">{fmtAmt(expense.amount, expense.currency)}</Text>
-                          {expense.currency !== group.currency && (
-                            <Text size="xs" c="dimmed">≈ {fmtAmt(expense.amount * expense.exchange_rate, group.currency)}</Text>
-                          )}
-                          {!isPending(expense) && permissions.can_edit_expenses && (
+                        <Text size="sm" c="dimmed">
+                          {expense.expense_type === 'transfer' ? (
+                            <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</>
+                          ) : (
                             <>
-                              <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => handleStartEditExpense(expense)}>
-                                <Text size="xs">✏️</Text>
-                              </ActionIcon>
-                              <ActionIcon size="sm" variant="subtle" color="red" onClick={() => handleDeleteExpense(expense.id)}>
-                                <Text size="xs">🗑️</Text>
-                              </ActionIcon>
+                              {expense.expense_type === 'income' ? 'Received by' : 'Paid by'}: {getMemberName(expense.paid_by)}
+                              {' · '}
+                              Split: {expense.split_between.map(getMemberName).join(', ')}
                             </>
                           )}
-                        </MGroup>
-                      </MGroup>
-                      <Text size="sm" c="dimmed">
+                          {' · '}
+                          <Text component="span" size="xs" c="dimmed">{formatDate(expense.expense_date)}</Text>
+                        </Text>
+                      </div>
+                      <Collapse in={expandedExpenses.has(expense.id)}>
+                        <Divider my="xs" />
                         {expense.expense_type === 'transfer' ? (
-                          <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</>
+                          <MGroup gap="xs">
+                            <Text size="sm">{getMemberName(expense.paid_by)}</Text>
+                            <Text size="sm" c="dimmed">→</Text>
+                            <Text size="sm">{expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</Text>
+                            <Text size="sm" fw={600} c="blue">{fmtAmt(expense.amount, expense.currency)}</Text>
+                          </MGroup>
                         ) : (
-                          <>
-                            {expense.expense_type === 'income' ? 'Received by' : 'Paid by'}: {getMemberName(expense.paid_by)}
-                            {' · '}
-                            Split: {expense.split_between.map(getMemberName).join(', ')}
-                          </>
+                          <Stack gap={4}>
+                            <Text size="sm" fw={500} c="dimmed">
+                              {expense.expense_type === 'income' ? 'Received by' : 'Paid by'} {getMemberName(expense.paid_by)}
+                              {expense.currency !== group.currency && (
+                                <Text component="span" size="xs" c="dimmed"> · Rate: 1 {expense.currency} = {expense.exchange_rate.toFixed(4)} {group.currency}</Text>
+                              )}
+                            </Text>
+                            {expense.split_between.map(memberId => {
+                              const share = expense.amount / expense.split_between.length;
+                              const shareInGroup = share * expense.exchange_rate;
+                              return (
+                                <MGroup key={memberId} justify="space-between" px="xs">
+                                  <Text size="sm">{getMemberName(memberId)}</Text>
+                                  <MGroup gap={4}>
+                                    {expense.currency !== group.currency && (
+                                      <Text size="xs" c="dimmed">{fmtAmt(share, expense.currency)} ≈</Text>
+                                    )}
+                                    <Text size="sm" fw={500} c="red">
+                                      -{fmtAmt(shareInGroup, group.currency)}
+                                    </Text>
+                                  </MGroup>
+                                </MGroup>
+                              );
+                            })}
+                          </Stack>
                         )}
-                        {' · '}
-                        <Text component="span" size="xs" c="dimmed">{formatDate(expense.expense_date)}</Text>
-                      </Text>
+                      </Collapse>
                     </>
                   )}
                 </Card>

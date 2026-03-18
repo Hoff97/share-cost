@@ -922,6 +922,52 @@ async fn delete_share_link(
     Ok(Status::NoContent)
 }
 
+// Rename group - requires valid JWT + delete_group permission
+#[put("/groups/current/name", data = "<request>")]
+async fn rename_group(
+    auth: GroupAuth,
+    request: Json<RenameGroupRequest>,
+) -> Result<Json<Group>, Status> {
+    if !auth.permissions.has_delete_group() {
+        return Err(Status::Forbidden);
+    }
+    let pool = db::get_pool();
+
+    sqlx::query("UPDATE groups SET name = $1 WHERE id = $2")
+        .bind(&request.name)
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| { eprintln!("Failed to rename group: {}", e); Status::InternalServerError })?;
+
+    // Return updated group
+    let group_row: GroupRow = sqlx::query_as(
+        "SELECT id, name, currency, created_at FROM groups WHERE id = $1"
+    )
+    .bind(auth.group_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| { eprintln!("DB error: {}", e); Status::InternalServerError })?;
+
+    let member_rows: Vec<MemberRow> = sqlx::query_as(
+        "SELECT id, group_id, name, paypal_email, iban, created_at FROM members WHERE group_id = $1 ORDER BY created_at"
+    )
+    .bind(auth.group_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| { eprintln!("DB error: {}", e); Status::InternalServerError })?;
+
+    let group = Group {
+        id: group_row.id,
+        name: group_row.name,
+        currency: group_row.currency,
+        members: member_rows.into_iter().map(Member::from).collect(),
+        created_at: group_row.created_at,
+    };
+
+    Ok(Json(group))
+}
+
 // Delete group - requires valid JWT + delete_group permission
 #[delete("/groups/current")]
 async fn delete_group(
@@ -980,6 +1026,7 @@ pub fn get_routes() -> Vec<Route> {
         delete_share_link,
         redeem_share_code,
         merge_token,
+        rename_group,
         delete_group
     ]
 }

@@ -193,6 +193,12 @@ pub struct RedeemShareCodeRequest {
     pub existing_token: Option<String>,
 }
 
+/// Request to rename a group.
+#[derive(Debug, Deserialize)]
+pub struct RenameGroupRequest {
+    pub name: String,
+}
+
 /// Request to merge an existing token with the current one.
 #[derive(Debug, Deserialize)]
 pub struct MergeTokenRequest {

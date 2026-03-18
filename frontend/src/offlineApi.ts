@@ -287,6 +287,10 @@ export async function deleteShareLink(token: string, code: string): Promise<void
   return api.deleteShareLink(token, code);
 }
 
+export async function renameGroup(token: string, name: string): Promise<api.Group> {
+  return api.renameGroup(token, name);
+}
+
 export async function deleteGroup(token: string): Promise<void> {
   return api.deleteGroup(token);
 }

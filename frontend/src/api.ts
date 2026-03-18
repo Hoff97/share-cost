@@ -282,6 +282,17 @@ export const deleteShareLink = async (token: string, code: string): Promise<void
   });
 };
 
+// Rename group
+export const renameGroup = async (token: string, name: string): Promise<Group> => {
+  const res = await fetch(`${API_BASE}/groups/current/name`, {
+    method: 'PUT',
+    headers: authHeaders(token),
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error('Failed to rename group');
+  return res.json();
+};
+
 // Delete group
 export const deleteGroup = async (token: string): Promise<void> => {
   await fetch(`${API_BASE}/groups/current`, {
