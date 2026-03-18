@@ -36,11 +36,13 @@ pub struct ExpenseRow {
     pub exchange_rate: BigDecimal,
     pub expense_date: NaiveDate,
     pub created_at: DateTime<Utc>,
+    pub split_type: String,
 }
 
 #[derive(Debug, Clone, FromRow)]
 pub struct ExpenseSplitMemberRow {
     pub member_id: Uuid,
+    pub share: Option<BigDecimal>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -69,6 +71,13 @@ pub struct Group {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SplitEntry {
+    pub member_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub share: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Expense {
     pub id: Uuid,
     pub group_id: Uuid,
@@ -82,6 +91,10 @@ pub struct Expense {
     pub exchange_rate: f64,
     pub expense_date: NaiveDate,
     pub created_at: DateTime<Utc>,
+    #[serde(default = "default_split_type")]
+    pub split_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub splits: Option<Vec<SplitEntry>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +127,10 @@ fn default_expense_type() -> String {
     "expense".to_string()
 }
 
+fn default_split_type() -> String {
+    "equal".to_string()
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateExpenseRequest {
     pub description: String,
@@ -126,6 +143,9 @@ pub struct CreateExpenseRequest {
     pub currency: Option<String>,
     pub exchange_rate: Option<f64>,
     pub expense_date: Option<NaiveDate>,
+    #[serde(default = "default_split_type")]
+    pub split_type: String,
+    pub splits: Option<Vec<SplitEntry>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -140,6 +160,9 @@ pub struct UpdateExpenseRequest {
     pub currency: Option<String>,
     pub exchange_rate: Option<f64>,
     pub expense_date: Option<NaiveDate>,
+    #[serde(default = "default_split_type")]
+    pub split_type: String,
+    pub splits: Option<Vec<SplitEntry>>,
 }
 
 // Response DTOs

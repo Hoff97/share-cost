@@ -39,6 +39,8 @@ async function replayMutation(m: QueuedMutation): Promise<void> {
         p.expenseDate as string | undefined,
         p.currency as string | undefined,
         p.exchangeRate as number | undefined,
+        (p.splitType as string | undefined) || 'equal',
+        p.splits as { member_id: string; share?: number }[] | undefined,
       );
       break;
     case 'updateExpense':
@@ -54,6 +56,8 @@ async function replayMutation(m: QueuedMutation): Promise<void> {
         p.expenseDate as string | undefined,
         p.currency as string | undefined,
         p.exchangeRate as number | undefined,
+        (p.splitType as string | undefined) || 'equal',
+        p.splits as { member_id: string; share?: number }[] | undefined,
       );
       break;
     case 'deleteExpense':

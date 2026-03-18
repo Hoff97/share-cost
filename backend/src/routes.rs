@@ -258,7 +258,7 @@ async fn get_expenses(
     
     // Get all expenses for this group
     let expense_rows: Vec<ExpenseRow> = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at, split_type 
          FROM expenses WHERE group_id = $1 ORDER BY expense_date DESC, created_at DESC"
     )
     .bind(auth.group_id)
@@ -273,7 +273,7 @@ async fn get_expenses(
     for row in expense_rows {
         // Get split members for each expense
         let splits: Vec<ExpenseSplitMemberRow> = sqlx::query_as(
-            "SELECT member_id FROM expense_splits WHERE expense_id = $1"
+            "SELECT member_id, share FROM expense_splits WHERE expense_id = $1"
         )
         .bind(row.id)
         .fetch_all(pool)
@@ -282,6 +282,16 @@ async fn get_expenses(
             eprintln!("Failed to fetch expense splits: {}", e);
             Status::InternalServerError
         })?;
+
+        let split_type = row.split_type.clone();
+        let split_entries: Option<Vec<SplitEntry>> = if split_type != "equal" {
+            Some(splits.iter().map(|s| SplitEntry {
+                member_id: s.member_id,
+                share: s.share.as_ref().and_then(|v| v.to_f64()),
+            }).collect())
+        } else {
+            None
+        };
 
         expenses.push(Expense {
             id: row.id,
@@ -296,6 +306,8 @@ async fn get_expenses(
             exchange_rate: row.exchange_rate.to_f64().unwrap_or(1.0),
             expense_date: row.expense_date,
             created_at: row.created_at,
+            split_type,
+            splits: split_entries,
         });
     }
 
@@ -335,8 +347,8 @@ async fn create_expense(
 
     // Insert expense
     sqlx::query(
-        "INSERT INTO expenses (id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
+        "INSERT INTO expenses (id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at, split_type) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
     )
     .bind(expense_id)
     .bind(auth.group_id)
@@ -349,6 +361,7 @@ async fn create_expense(
     .bind(&exchange_rate_val)
     .bind(expense_date)
     .bind(created_at)
+    .bind(&request.split_type)
     .execute(pool)
     .await
     .map_err(|e| {
@@ -359,11 +372,17 @@ async fn create_expense(
     // Insert expense splits (not needed for transfers)
     if request.expense_type != "transfer" {
         for member_id in &request.split_between {
+            let share_val: Option<BigDecimal> = request.splits.as_ref().and_then(|splits| {
+                splits.iter().find(|s| &s.member_id == member_id).and_then(|s| {
+                    s.share.and_then(|v| BigDecimal::try_from(v).ok())
+                })
+            });
             sqlx::query(
-                "INSERT INTO expense_splits (expense_id, member_id) VALUES ($1, $2)"
+                "INSERT INTO expense_splits (expense_id, member_id, share) VALUES ($1, $2, $3)"
             )
             .bind(expense_id)
             .bind(member_id)
+            .bind(&share_val)
             .execute(pool)
             .await
             .map_err(|e| {
@@ -372,6 +391,12 @@ async fn create_expense(
             })?;
         }
     }
+
+    let split_entries: Option<Vec<SplitEntry>> = if request.split_type != "equal" {
+        request.splits.clone()
+    } else {
+        None
+    };
 
     let expense = Expense {
         id: expense_id,
@@ -386,6 +411,8 @@ async fn create_expense(
         exchange_rate: request.exchange_rate.unwrap_or(1.0),
         expense_date,
         created_at,
+        split_type: request.split_type.clone(),
+        splits: split_entries,
     };
 
     Ok(Json(expense))
@@ -406,7 +433,7 @@ async fn update_expense(
 
     // Verify expense belongs to this group
     let _existing: ExpenseRow = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at, split_type 
          FROM expenses WHERE id = $1 AND group_id = $2"
     )
     .bind(expense_uuid)
@@ -426,8 +453,8 @@ async fn update_expense(
 
     // Update expense
     sqlx::query(
-        "UPDATE expenses SET description = $1, amount = $2, paid_by = $3, expense_type = $4, transfer_to = $5, currency = $6, exchange_rate = $7, expense_date = $8
-         WHERE id = $9"
+        "UPDATE expenses SET description = $1, amount = $2, paid_by = $3, expense_type = $4, transfer_to = $5, currency = $6, exchange_rate = $7, expense_date = $8, split_type = $9
+         WHERE id = $10"
     )
     .bind(&request.description)
     .bind(&amount)
@@ -437,6 +464,7 @@ async fn update_expense(
     .bind(&currency)
     .bind(&exchange_rate_val)
     .bind(expense_date)
+    .bind(&request.split_type)
     .bind(expense_uuid)
     .execute(pool)
     .await
@@ -457,11 +485,17 @@ async fn update_expense(
 
     if request.expense_type != "transfer" {
         for member_id in &request.split_between {
+            let share_val: Option<BigDecimal> = request.splits.as_ref().and_then(|splits| {
+                splits.iter().find(|s| &s.member_id == member_id).and_then(|s| {
+                    s.share.and_then(|v| BigDecimal::try_from(v).ok())
+                })
+            });
             sqlx::query(
-                "INSERT INTO expense_splits (expense_id, member_id) VALUES ($1, $2)"
+                "INSERT INTO expense_splits (expense_id, member_id, share) VALUES ($1, $2, $3)"
             )
             .bind(expense_uuid)
             .bind(member_id)
+            .bind(&share_val)
             .execute(pool)
             .await
             .map_err(|e| {
@@ -470,6 +504,12 @@ async fn update_expense(
             })?;
         }
     }
+
+    let split_entries: Option<Vec<SplitEntry>> = if request.split_type != "equal" {
+        request.splits.clone()
+    } else {
+        None
+    };
 
     let expense = Expense {
         id: expense_uuid,
@@ -484,6 +524,8 @@ async fn update_expense(
         exchange_rate: request.exchange_rate.unwrap_or(1.0),
         expense_date,
         created_at: _existing.created_at,
+        split_type: request.split_type.clone(),
+        splits: split_entries,
     };
 
     Ok(Json(expense))
@@ -503,7 +545,7 @@ async fn delete_expense(
 
     // Verify expense belongs to this group
     let _existing: ExpenseRow = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at, split_type 
          FROM expenses WHERE id = $1 AND group_id = $2"
     )
     .bind(expense_uuid)
@@ -560,7 +602,7 @@ async fn get_balances(
 
     // Get all expenses with splits
     let expense_rows: Vec<ExpenseRow> = sqlx::query_as(
-        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at 
+        "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at, split_type 
          FROM expenses WHERE group_id = $1"
     )
     .bind(auth.group_id)
@@ -603,7 +645,7 @@ async fn get_balances(
             "income" => {
                 // External income: receiver holds money, split members are owed their share
                 let splits: Vec<ExpenseSplitMemberRow> = sqlx::query_as(
-                    "SELECT member_id FROM expense_splits WHERE expense_id = $1"
+                    "SELECT member_id, share FROM expense_splits WHERE expense_id = $1"
                 )
                 .bind(expense_row.id)
                 .fetch_all(pool)
@@ -617,7 +659,6 @@ async fn get_balances(
                 if split_count == 0.0 {
                     continue;
                 }
-                let split_amount = amount / split_count;
 
                 // The receiver holds the money (owes distribution)
                 if let Some(receiver) = balances.iter_mut().find(|b| b.user_id == paid_by) {
@@ -625,16 +666,27 @@ async fn get_balances(
                 }
 
                 // Each split member is owed their share
-                for split in splits {
+                for split in &splits {
+                    let member_amount = match expense_row.split_type.as_str() {
+                        "percentage" => {
+                            let pct = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(100.0 / split_count);
+                            amount * pct / 100.0
+                        }
+                        "exact" => {
+                            let exact = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(raw_amount / split_count);
+                            exact * exchange_rate
+                        }
+                        _ => amount / split_count, // equal
+                    };
                     if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id) {
-                        member.balance += split_amount;
+                        member.balance += member_amount;
                     }
                 }
             }
             _ => {
                 // Regular expense: payer gets credit, split members owe
                 let splits: Vec<ExpenseSplitMemberRow> = sqlx::query_as(
-                    "SELECT member_id FROM expense_splits WHERE expense_id = $1"
+                    "SELECT member_id, share FROM expense_splits WHERE expense_id = $1"
                 )
                 .bind(expense_row.id)
                 .fetch_all(pool)
@@ -648,7 +700,6 @@ async fn get_balances(
                 if split_count == 0.0 {
                     continue;
                 }
-                let split_amount = amount / split_count;
 
                 // The payer gets credit
                 if let Some(payer) = balances.iter_mut().find(|b| b.user_id == paid_by) {
@@ -656,9 +707,20 @@ async fn get_balances(
                 }
 
                 // Each person in the split owes
-                for split in splits {
+                for split in &splits {
+                    let member_amount = match expense_row.split_type.as_str() {
+                        "percentage" => {
+                            let pct = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(100.0 / split_count);
+                            amount * pct / 100.0
+                        }
+                        "exact" => {
+                            let exact = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(raw_amount / split_count);
+                            exact * exchange_rate
+                        }
+                        _ => amount / split_count, // equal
+                    };
                     if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id) {
-                        member.balance -= split_amount;
+                        member.balance -= member_amount;
                     }
                 }
             }

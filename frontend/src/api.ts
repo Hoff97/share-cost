@@ -20,6 +20,11 @@ export interface GroupCreatedResponse {
   token: string;
 }
 
+export interface SplitEntry {
+  member_id: string;
+  share?: number;
+}
+
 export interface Expense {
   id: string;
   group_id: string;
@@ -33,6 +38,8 @@ export interface Expense {
   exchange_rate: number;
   expense_date: string;
   created_at: string;
+  split_type: string;
+  splits?: SplitEntry[];
 }
 
 export interface Balance {
@@ -120,7 +127,9 @@ export const createExpense = async (
   transferTo?: string,
   expenseDate?: string,
   currency?: string,
-  exchangeRate?: number
+  exchangeRate?: number,
+  splitType: string = 'equal',
+  splits?: SplitEntry[],
 ): Promise<Expense> => {
   const res = await fetch(`${API_BASE}/groups/current/expenses`, {
     method: 'POST',
@@ -135,6 +144,8 @@ export const createExpense = async (
       expense_date: expenseDate || null,
       currency: currency || null,
       exchange_rate: exchangeRate ?? null,
+      split_type: splitType,
+      splits: splits || null,
     }),
   });
   return res.json();
@@ -175,7 +186,9 @@ export const updateExpense = async (
   transferTo?: string,
   expenseDate?: string,
   currency?: string,
-  exchangeRate?: number
+  exchangeRate?: number,
+  splitType: string = 'equal',
+  splits?: SplitEntry[],
 ): Promise<Expense> => {
   const res = await fetch(`${API_BASE}/groups/current/expenses/${expenseId}`, {
     method: 'PUT',
@@ -190,6 +203,8 @@ export const updateExpense = async (
       expense_date: expenseDate || null,
       currency: currency || null,
       exchange_rate: exchangeRate ?? null,
+      split_type: splitType,
+      splits: splits || null,
     }),
   });
   return res.json();

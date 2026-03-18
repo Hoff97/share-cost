@@ -2,7 +2,7 @@
 // for reads, and queues mutations for later sync when offline.
 
 import * as api from './api';
-import type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse, ShareCodeResponse, ShareLinkItem } from './api';
+import type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse, ShareCodeResponse, ShareLinkItem, SplitEntry } from './api';
 import {
   cacheGroup, getCachedGroup,
   cacheExpenses, getCachedExpenses,
@@ -12,7 +12,7 @@ import {
 import { getStoredGroups } from './storage';
 
 // Re-export all types so components can import from here
-export type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse, ShareCodeResponse, ShareLinkItem };
+export type { Group, Member, Expense, Balance, GroupCreatedResponse, Permissions, ShareLinkResponse, ShareCodeResponse, ShareLinkItem, SplitEntry };
 
 /** Returns true for expenses created offline that haven't been synced yet */
 export function isPending(expense: Expense): boolean {
@@ -106,16 +106,20 @@ export async function createExpense(
   expenseDate?: string,
   currency?: string,
   exchangeRate?: number,
+  splitType: string = 'equal',
+  splits?: SplitEntry[],
 ): Promise<Expense> {
   try {
     return await api.createExpense(
       token, description, amount, paidBy, splitBetween,
       expenseType, transferTo, expenseDate, currency, exchangeRate,
+      splitType, splits,
     );
   } catch {
     await enqueueMutation(groupId, token, 'createExpense', {
       description, amount, paidBy, splitBetween,
       expenseType, transferTo, expenseDate, currency, exchangeRate,
+      splitType, splits,
     });
     const temp: Expense = {
       id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -130,6 +134,8 @@ export async function createExpense(
       exchange_rate: exchangeRate ?? 1,
       expense_date: expenseDate || new Date().toISOString().slice(0, 10),
       created_at: new Date().toISOString(),
+      split_type: splitType,
+      splits: splits,
     };
     const cached = await getCachedExpenses(groupId);
     await cacheExpenses(groupId, [temp, ...cached]);
@@ -151,16 +157,20 @@ export async function updateExpense(
   expenseDate?: string,
   currency?: string,
   exchangeRate?: number,
+  splitType: string = 'equal',
+  splits?: SplitEntry[],
 ): Promise<Expense> {
   try {
     return await api.updateExpense(
       token, expenseId, description, amount, paidBy, splitBetween,
       expenseType, transferTo, expenseDate, currency, exchangeRate,
+      splitType, splits,
     );
   } catch {
     await enqueueMutation(groupId, token, 'updateExpense', {
       expenseId, description, amount, paidBy, splitBetween,
       expenseType, transferTo, expenseDate, currency, exchangeRate,
+      splitType, splits,
     });
     const cached = await getCachedExpenses(groupId);
     const original = cached.find(e => e.id === expenseId);
@@ -177,6 +187,8 @@ export async function updateExpense(
       exchange_rate: exchangeRate ?? 1,
       expense_date: expenseDate || new Date().toISOString().slice(0, 10),
       created_at: original?.created_at || new Date().toISOString(),
+      split_type: splitType,
+      splits: splits,
     };
     await cacheExpenses(groupId, cached.map(e => e.id === expenseId ? updated : e));
     notifyMutationQueued();
