@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge, CloseButton, ActionIcon, useMantineColorScheme, useComputedColorScheme } from '@mantine/core';
+import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge, CloseButton, ActionIcon, useMantineColorScheme, useComputedColorScheme, Select } from '@mantine/core';
+import { useTranslation } from 'react-i18next';
+import { LANGUAGES } from './i18n';
 import * as api from './offlineApi';
 import type { Group } from './offlineApi';
 import { CreateGroup } from './components/CreateGroup';
@@ -42,16 +44,36 @@ function DarkModeToggle() {
   );
 }
 
+function LanguageSelector({ i18n }: { i18n: { language: string; changeLanguage: (lng: string) => void } }) {
+  const lang = i18n.language || 'en';
+  const resolved = LANGUAGES.find(l => l.code === lang)?.code
+    ?? LANGUAGES.find(l => l.code === lang.substring(0, 2))?.code
+    ?? 'en';
+  return (
+    <Select
+      size="xs"
+      w={110}
+      data={LANGUAGES.map(l => ({ value: l.code, label: l.label }))}
+      value={resolved}
+      onChange={(val) => val && i18n.changeLanguage(val)}
+      allowDeselect={false}
+      withCheckIcon={false}
+      styles={{ input: { textAlign: 'center' } }}
+    />
+  );
+}
+
 function SyncStatus() {
   const { isOnline, pendingCount, syncing } = useSync();
+  const { t } = useTranslation();
   if (isOnline && pendingCount === 0 && !syncing) return null;
   return (
     <div style={{ position: 'fixed', bottom: 16, right: 16, display: 'flex', gap: 8, zIndex: 1000 }}>
-      {!isOnline && <Badge color="orange" size="lg" variant="filled">📡 Offline</Badge>}
-      {syncing && <Badge color="blue" size="lg" variant="filled">🔄 Syncing…</Badge>}
+      {!isOnline && <Badge color="orange" size="lg" variant="filled">{t('offline')}</Badge>}
+      {syncing && <Badge color="blue" size="lg" variant="filled">{t('syncing')}</Badge>}
       {!syncing && pendingCount > 0 && (
         <Badge color="yellow" size="lg" variant="filled">
-          ⏳ {pendingCount} pending
+          {t('pending_count', { count: pendingCount })}
         </Badge>
       )}
     </div>
@@ -66,6 +88,7 @@ interface BeforeInstallPromptEvent extends Event {
 const INSTALL_DISMISSED_KEY = 'share-cost-install-dismissed';
 
 function InstallBanner() {
+  const { t } = useTranslation();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIosHint, setShowIosHint] = useState(false);
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(INSTALL_DISMISSED_KEY) === 'true');
@@ -120,10 +143,10 @@ function InstallBanner() {
         <MGroup gap="sm" align="center" pr={24}>
           <Text size="lg">📲</Text>
           <div style={{ flex: 1 }}>
-            <Text size="sm" fw={600}>Install Share Cost</Text>
-            <Text size="xs" c="dimmed">Add to your home screen for offline access</Text>
+            <Text size="sm" fw={600}>{t('installTitle')}</Text>
+            <Text size="xs" c="dimmed">{t('installDesc')}</Text>
           </div>
-          <Button size="compact-sm" onClick={handleInstall}>Install</Button>
+          <Button size="compact-sm" onClick={handleInstall}>{t('install')}</Button>
         </MGroup>
       </Paper>
     );
@@ -137,10 +160,8 @@ function InstallBanner() {
         <MGroup gap="sm" align="center" pr={24}>
           <Text size="lg">📲</Text>
           <div style={{ flex: 1 }}>
-            <Text size="sm" fw={600}>Install Share Cost</Text>
-            <Text size="xs" c="dimmed">
-              Tap the share button <Text component="span" fw={700}>⬆</Text> then "Add to Home Screen"
-            </Text>
+            <Text size="sm" fw={600}>{t('installTitle')}</Text>
+            <Text size="xs" c="dimmed">{t('installIosDesc')}</Text>
           </div>
         </MGroup>
       </Paper>
@@ -151,6 +172,7 @@ function InstallBanner() {
 }
 
 function AppContent() {
+  const { t, i18n } = useTranslation();
   const [group, setGroup] = useState<Group | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -203,10 +225,10 @@ function AppContent() {
         saveGroup(groupData.id, groupData.name, finalToken);
         setStoredGroups(getStoredGroups());
       } else {
-        setError('Invalid or expired share link');
+        setError(t('invalidShareLink'));
       }
     } catch {
-      setError('Invalid or expired share link');
+      setError(t('invalidShareLink'));
     }
     setLoading(false);
   };
@@ -233,10 +255,10 @@ function AppContent() {
         saveGroup(groupData.id, groupData.name, finalToken);
         setStoredGroups(getStoredGroups());
       } else {
-        setError('Invalid or expired link');
+        setError(t('invalidLink'));
       }
     } catch {
-      setError('Failed to load group');
+      setError(t('failedLoadGroup'));
     }
     setLoading(false);
   };
@@ -281,8 +303,11 @@ function AppContent() {
     return (
       <Container size="sm" py="xl">
         <MGroup justify="space-between" align="center" mb="md">
-          <Title order={1}>💰 Share Cost</Title>
-          <DarkModeToggle />
+          <Title order={1}>{t('appTitle')}</Title>
+          <MGroup gap="xs">
+            <LanguageSelector i18n={i18n} />
+            <DarkModeToggle />
+          </MGroup>
         </MGroup>
         <Center py="xl">
           <Loader size="lg" />
@@ -295,15 +320,18 @@ function AppContent() {
     return (
       <Container size="sm" py="xl">
         <MGroup justify="space-between" align="center" mb="md">
-          <Title order={1}>💰 Share Cost</Title>
-          <DarkModeToggle />
+          <Title order={1}>{t('appTitle')}</Title>
+          <MGroup gap="xs">
+            <LanguageSelector i18n={i18n} />
+            <DarkModeToggle />
+          </MGroup>
         </MGroup>
         <Stack align="center" gap="md">
-          <Alert color="red" title="Error" w="100%">
+          <Alert color="red" title={t('error')} w="100%">
             {error}
           </Alert>
           <Button onClick={() => { setError(null); window.location.hash = ''; }}>
-            Create a New Group
+            {t('createNewGroup')}
           </Button>
         </Stack>
       </Container>
@@ -314,8 +342,11 @@ function AppContent() {
     return (
       <Container size="sm" py="xl">
         <MGroup justify="space-between" align="center" mb="lg">
-          <Title order={1} style={{ cursor: 'pointer' }} onClick={handleBackToList}>💰 Share Cost</Title>
-          <DarkModeToggle />
+          <Title order={1} style={{ cursor: 'pointer' }} onClick={handleBackToList}>{t('appTitle')}</Title>
+          <MGroup gap="xs">
+            <LanguageSelector i18n={i18n} />
+            <DarkModeToggle />
+          </MGroup>
         </MGroup>
         <GroupDetail
           group={group}
@@ -330,10 +361,13 @@ function AppContent() {
   return (
     <Container size="sm" py="xl">
       <MGroup justify="space-between" align="center" mb="md">
-        <Title order={1}>💰 Share Cost</Title>
-        <DarkModeToggle />
+        <Title order={1}>{t('appTitle')}</Title>
+        <MGroup gap="xs">
+          <LanguageSelector i18n={i18n} />
+          <DarkModeToggle />
+        </MGroup>
       </MGroup>
-      <Text c="dimmed" ta="center">Split expenses with friends, no sign-up required</Text>
+      <Text c="dimmed" ta="center">{t('tagline')}</Text>
       <InstallBanner />
       {showCreate ? (
         <CreateGroup
@@ -343,10 +377,10 @@ function AppContent() {
       ) : (
         <Paper shadow="xs" p="xl" mt="lg" radius="md">
           <Stack align="center" gap="md">
-            <Text>Create a group to start tracking shared expenses.</Text>
-            <Text>Share the link with your friends — anyone with the link can access the group.</Text>
+            <Text>{t('createGroupPrompt')}</Text>
+            <Text>{t('shareGroupPrompt')}</Text>
             <Button size="lg" onClick={() => setShowCreate(true)}>
-              Create New Group
+              {t('createNewGroup')}
             </Button>
           </Stack>
           <GroupList

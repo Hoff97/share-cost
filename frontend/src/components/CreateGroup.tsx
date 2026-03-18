@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Paper, Title, TextInput, Button, Stack, Pill, Group as MGroup, Select,
 } from '@mantine/core';
+import { useTranslation } from 'react-i18next';
 import * as api from '../api';
 import type { Group } from '../api';
 
@@ -11,6 +12,7 @@ interface CreateGroupProps {
 }
 
 export function CreateGroup({ onGroupCreated, onCancel }: CreateGroupProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [memberInput, setMemberInput] = useState('');
   const [members, setMembers] = useState<string[]>([]);
@@ -45,18 +47,18 @@ export function CreateGroup({ onGroupCreated, onCancel }: CreateGroupProps) {
 
   return (
     <Paper shadow="xs" p="xl" mt="lg" radius="md" withBorder>
-      <Title order={3} mb="md">Create New Group</Title>
+      <Title order={3} mb="md">{t('createNewGroup')}</Title>
       <form onSubmit={handleSubmit}>
         <Stack gap="md">
           <TextInput
-            label="Group Name"
-            placeholder="e.g., Trip to Paris, Roommates"
+            label={t('groupName')}
+            placeholder={t('groupNamePlaceholder')}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
 
           <Select
-            label="Currency"
+            label={t('currency')}
             data={[
               'AUD', 'BGN', 'BRL', 'CAD', 'CHF', 'CNY', 'CZK', 'DKK',
               'EUR', 'GBP', 'HKD', 'HUF', 'IDR', 'ILS', 'INR', 'ISK',
@@ -70,14 +72,14 @@ export function CreateGroup({ onGroupCreated, onCancel }: CreateGroupProps) {
 
           <div>
             <TextInput
-              label="Members (at least 2)"
-              placeholder="Enter member name"
+              label={t('membersLabel')}
+              placeholder={t('enterMemberName')}
               value={memberInput}
               onChange={(e) => setMemberInput(e.target.value)}
               onKeyDown={handleKeyPress}
               rightSection={
                 <Button size="compact-xs" variant="light" onClick={handleAddMember}>
-                  Add
+                  {t('add')}
                 </Button>
               }
               rightSectionWidth={60}
@@ -99,9 +101,9 @@ export function CreateGroup({ onGroupCreated, onCancel }: CreateGroupProps) {
           </div>
 
           <MGroup gap="sm" grow>
-            <Button variant="default" onClick={onCancel}>Cancel</Button>
+            <Button variant="default" onClick={onCancel}>{t('cancel')}</Button>
             <Button type="submit" disabled={!name || members.length < 2}>
-              Create Group
+              {t('createGroup')}
             </Button>
           </MGroup>
         </Stack>

@@ -1,4 +1,5 @@
 import { Title, Text, Card, Stack, Group as MGroup, Badge, ActionIcon, Paper } from '@mantine/core';
+import { useTranslation } from 'react-i18next';
 import type { StoredGroup } from '../storage';
 import { removeGroup } from '../storage';
 
@@ -18,9 +19,10 @@ interface GroupListProps {
 }
 
 export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListProps) => {
+  const { t } = useTranslation();
   const handleRemove = (e: React.MouseEvent, group: StoredGroup) => {
     e.stopPropagation();
-    if (confirm(`Remove "${group.name}" from your list? You can rejoin using the share link.`)) {
+    if (confirm(t('confirmRemoveGroup', { name: group.name }))) {
       removeGroup(group.id);
       onGroupRemoved();
     }
@@ -42,14 +44,14 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
 
   return (
     <Stack gap="sm" mt="xl" style={{ textAlign: 'left' }}>
-      <Title order={4}>Your Groups</Title>
+      <Title order={4}>{t('yourGroups')}</Title>
 
       {currencyEntries.length > 0 && (
         <Paper p="sm" radius="md" bg="light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))">
           {currencyEntries.map(([cur, total]) => (
             <MGroup key={cur} justify="space-between">
               <Text fw={600} c={total >= 0 ? 'green' : 'red'}>
-                {currencyEntries.length > 1 ? `Balance (${cur}):` : 'Total Balance:'}
+                {currencyEntries.length > 1 ? t('balanceCurrency', { currency: cur }) : t('totalBalance')}
               </Text>
               <Text fw={700} size="lg" c={total >= 0 ? 'green' : 'red'}>
                 {fmtAmt(total, cur)}
@@ -102,8 +104,8 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
               <Text fw={500} truncate>{group.name}</Text>
               <Text size="xs" c="dimmed">
                 {group.selectedMemberName
-                  ? `You: ${group.selectedMemberName}`
-                  : 'Select yourself in group'}
+                  ? t('you', { name: group.selectedMemberName })
+                  : t('selectYourselfInGroup')}
               </Text>
             </div>
             {group.cachedBalance !== undefined && (
@@ -119,7 +121,7 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
               variant="subtle"
               color="gray"
               onClick={(e) => handleRemove(e, group)}
-              title="Remove from list"
+              title={t('removeFromList')}
             >
               ×
             </ActionIcon>

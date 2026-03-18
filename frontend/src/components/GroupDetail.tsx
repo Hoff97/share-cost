@@ -8,6 +8,7 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { DatePickerInput } from '@mantine/dates';
 import { QRCodeSVG } from 'qrcode.react';
+import { useTranslation } from 'react-i18next';
 import 'dayjs/locale/de';
 import * as api from '../offlineApi';
 import type { Group, Expense, Balance, Permissions, ShareLinkItem } from '../offlineApi';
@@ -64,6 +65,7 @@ const snapToMark = (val: number, target: number, max: number) => {
 };
 
 export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: GroupDetailProps) {
+  const { t } = useTranslation();
   const colorScheme = useComputedColorScheme('light');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
@@ -273,7 +275,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       // Refresh the list
       api.listShareLinks(token).then(setExistingShareLinks).catch(() => {});
     } catch {
-      alert('Failed to generate share link. Please try again.');
+      alert(t('failedShareLink'));
     }
   };
 
@@ -286,17 +288,17 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
         setGeneratedShareUrl(null);
       }
     } catch {
-      alert('Failed to delete share link.');
+      alert(t('failedDeleteShareLink'));
     }
   };
 
   const handleDeleteGroup = async () => {
-    if (!confirm('Are you sure you want to permanently delete this group and all its data?')) return;
+    if (!confirm(t('confirmDeleteGroup'))) return;
     try {
       await api.deleteGroup(token);
       onGroupDeleted?.();
     } catch {
-      alert('Failed to delete group. You may not have permission.');
+      alert(t('failedDeleteGroup'));
     }
   };
 
@@ -308,7 +310,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       setEditingGroupName(false);
       onGroupUpdated();
     } catch {
-      alert('Failed to rename group.');
+      alert(t('failedRenameGroup'));
     }
   };
 
@@ -336,7 +338,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     await api.createExpense(
       token,
       group.id,
-      `Settlement: ${fromName} → ${toName}`,
+      `${t('settlementDesc', { from: fromName, to: toName })}`,
       amount,
       fromId,
       [],
@@ -603,9 +605,9 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     const myNameInTarget = targetGroupMembers.find(m => m.id === myIdInTarget)?.name || 'Unknown';
 
     // Settle debt in current group
-    await api.createExpense(token, group.id, `Balance transferred to ${targetGroupName}`, amount, fromId, [], 'transfer', toId);
+    await api.createExpense(token, group.id, t('balanceTransferredTo', { group: targetGroupName }), amount, fromId, [], 'transfer', toId);
     // Create corresponding debt in target group
-    await api.createExpense(targetGroupToken, targetGroupId || '', `Balance transferred from ${group.name}`, amount, creditorInTargetId, [], 'transfer', myIdInTarget);
+    await api.createExpense(targetGroupToken, targetGroupId || '', t('balanceTransferredFrom', { group: group.name }), amount, creditorInTargetId, [], 'transfer', myIdInTarget);
 
     // Save identity in target group if not already set
     if (targetGroupId) {
@@ -657,7 +659,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
         <MGroup gap="sm">
           {selectedMemberId ? (
             <MGroup gap="xs">
-              <Text size="sm" c="dimmed">You:</Text>
+              <Text size="sm" c="dimmed">{t('youLabel')}:</Text>
               <Select
                 size="xs"
                 data={memberOptions}
@@ -678,7 +680,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
           ) : (
             <Select
               size="sm"
-              placeholder="Who are you?"
+              placeholder={t('whoAreYou')}
               data={memberOptions}
               value={null}
               onChange={(val) => val && handleSelectMember(val)}
@@ -686,7 +688,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
             />
           )}
           <Button size="xs" color="green" onClick={handleOpenShareModal}>
-            🔗 Share
+            {t('share')}
           </Button>
         </MGroup>
       </MGroup>
@@ -695,13 +697,13 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       <Tabs defaultValue="expenses" variant="outline">
         <Tabs.List grow>
           <Tabs.Tab value="expenses">
-            Expenses{expenses.length > 0 && ` (${expenses.length})`}
+            {expenses.length > 0 ? t('expensesCount', { count: expenses.length }) : t('expenses')}
           </Tabs.Tab>
           <Tabs.Tab value="balances">
-            Balances
+            {t('balances')}
           </Tabs.Tab>
           <Tabs.Tab value="members">
-            Members ({group.members.length})
+            {t('membersCount', { count: group.members.length })}
           </Tabs.Tab>
         </Tabs.List>
 
@@ -716,7 +718,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
               onClick={toggleAddEntry}
               style={{ cursor: 'pointer', userSelect: 'none' }}
             >
-              <Title order={4}>Add Entry</Title>
+              <Title order={4}>{t('addEntry')}</Title>
               <Text size="xl" c="dimmed" style={{ transition: 'transform 200ms', transform: addEntryOpened ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                 ▾
               </Text>
@@ -738,19 +740,19 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       }
                     }}
                     data={[
-                      { label: '💳 Expense', value: 'expense' },
-                      { label: '💸 Transfer', value: 'transfer' },
-                      { label: '💰 Income', value: 'income' },
+                      { label: t('expense'), value: 'expense' },
+                      { label: t('transfer'), value: 'transfer' },
+                      { label: t('income'), value: 'income' },
                     ]}
                   />
                   <TextInput
-                    placeholder="Description"
+                    placeholder={t('description')}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
                   <MGroup gap="xs">
                     <NumberInput
-                      placeholder="Amount"
+                      placeholder={t('amount')}
                       min={0}
                       step={0.01}
                       decimalScale={2}
@@ -770,7 +772,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   {expenseCurrency !== group.currency && (
                     <MGroup gap="xs" align="flex-end">
                       <NumberInput
-                        label={`1 ${expenseCurrency} = ? ${group.currency}`}
+                        label={t('exchangeRateLabel', { from: expenseCurrency, to: group.currency })}
                         value={exchangeRate}
                         onChange={(val) => setExchangeRate(typeof val === 'string' ? parseFloat(val) || 1 : val)}
                         decimalScale={6}
@@ -787,7 +789,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                     </MGroup>
                   )}
                   <Select
-                    placeholder={expenseType === 'transfer' ? 'From who?' : expenseType === 'income' ? 'Received by?' : 'Who paid?'}
+                    placeholder={expenseType === 'transfer' ? t('fromWho') : expenseType === 'income' ? t('receivedBy') : t('whoPaid')}
                     data={memberOptions}
                     value={paidBy}
                     onChange={setPaidBy}
@@ -795,7 +797,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   />
                   {expenseType === 'transfer' ? (
                     <Select
-                      placeholder="To who?"
+                      placeholder={t('toWho')}
                       data={memberOptions.filter(m => m.value !== paidBy)}
                       value={transferTo}
                       onChange={setTransferTo}
@@ -803,10 +805,10 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                     />
                   ) : (
                     <div>
-                      <Text size="sm" fw={500} mb={4}>Split between:</Text>
+                      <Text size="sm" fw={500} mb={4}>{t('splitBetween')}</Text>
                       <Stack gap={4}>
                         <Checkbox
-                          label="Everyone"
+                          label={t('everyone')}
                           fw={600}
                           checked={splitBetween.length === group.members.length}
                           indeterminate={splitBetween.length > 0 && splitBetween.length < group.members.length}
@@ -826,7 +828,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       </Stack>
                       {splitBetween.length > 0 && (
                         <>
-                          <Text size="sm" fw={500} mt="sm" mb={4}>Split method:</Text>
+                          <Text size="sm" fw={500} mt="sm" mb={4}>{t('splitMethod')}</Text>
                           <SegmentedControl
                             fullWidth
                             size="xs"
@@ -855,9 +857,9 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                               }
                             }}
                             data={[
-                              { label: 'Equal', value: 'equal' },
-                              { label: 'Percentage', value: 'percentage' },
-                              { label: 'Exact', value: 'exact' },
+                              { label: t('equal'), value: 'equal' },
+                              { label: t('percentage'), value: 'percentage' },
+                              { label: t('exact'), value: 'exact' },
                             ]}
                           />
                           {splitType !== 'equal' && (
@@ -921,8 +923,8 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                     </div>
                   )}
                   <DatePickerInput
-                    label="Date"
-                    placeholder="Pick a date"
+                    label={t('date')}
+                    placeholder={t('pickDate')}
                     value={expenseDate}
                     onChange={setExpenseDate}
                     locale="de"
@@ -931,7 +933,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                     maxDate={new Date()}
                   />
                   <Button type="submit" fullWidth>
-                    {expenseType === 'transfer' ? 'Add Transfer' : expenseType === 'income' ? 'Add Income' : 'Add Expense'}
+                    {expenseType === 'transfer' ? t('addTransfer') : expenseType === 'income' ? t('addIncome') : t('addExpense')}
                   </Button>
                 </Stack>
               </form>
@@ -941,7 +943,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
 
           <Stack gap="xs">
             {expenses.length === 0 ? (
-              <Text c="dimmed" ta="center" py="lg">No expenses yet. Add one above!</Text>
+              <Text c="dimmed" ta="center" py="lg">{t('noExpenses')}</Text>
             ) : (
               expenses.map((expense) => (
                 <Card
@@ -970,19 +972,19 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                           else setEditTransferTo(null);
                         }}
                         data={[
-                          { label: '💳 Expense', value: 'expense' },
-                          { label: '💸 Transfer', value: 'transfer' },
-                          { label: '💰 Income', value: 'income' },
+                          { label: t('expense'), value: 'expense' },
+                          { label: t('transfer'), value: 'transfer' },
+                          { label: t('income'), value: 'income' },
                         ]}
                       />
                       <TextInput
-                        placeholder="Description"
+                        placeholder={t('description')}
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
                       />
                       <MGroup gap="xs">
                         <NumberInput
-                          placeholder="Amount"
+                          placeholder={t('amount')}
                           min={0}
                           step={0.01}
                           decimalScale={2}
@@ -1002,7 +1004,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       {editExpenseCurrency !== group.currency && (
                         <MGroup gap="xs" align="flex-end">
                           <NumberInput
-                            label={`1 ${editExpenseCurrency} = ? ${group.currency}`}
+                            label={t('exchangeRateLabel', { from: editExpenseCurrency, to: group.currency })}
                             value={editExchangeRate}
                             onChange={(val) => setEditExchangeRate(typeof val === 'string' ? parseFloat(val) || 1 : val)}
                             decimalScale={6}
@@ -1019,7 +1021,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         </MGroup>
                       )}
                       <Select
-                        placeholder={editExpenseType === 'transfer' ? 'From who?' : editExpenseType === 'income' ? 'Received by?' : 'Who paid?'}
+                        placeholder={editExpenseType === 'transfer' ? t('fromWho') : editExpenseType === 'income' ? t('receivedBy') : t('whoPaid')}
                         data={memberOptions}
                         value={editPaidBy}
                         onChange={setEditPaidBy}
@@ -1027,7 +1029,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       />
                       {editExpenseType === 'transfer' ? (
                         <Select
-                          placeholder="To who?"
+                          placeholder={t('toWho')}
                           data={memberOptions.filter(m => m.value !== editPaidBy)}
                           value={editTransferTo}
                           onChange={setEditTransferTo}
@@ -1035,10 +1037,10 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         />
                       ) : (
                         <div>
-                          <Text size="sm" fw={500} mb={4}>Split between:</Text>
+                          <Text size="sm" fw={500} mb={4}>{t('splitBetween')}</Text>
                           <Stack gap={4}>
                             <Checkbox
-                              label="Everyone"
+                              label={t('everyone')}
                               fw={600}
                               checked={editSplitBetween.length === group.members.length}
                               indeterminate={editSplitBetween.length > 0 && editSplitBetween.length < group.members.length}
@@ -1058,7 +1060,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                           </Stack>
                           {editSplitBetween.length > 0 && (
                             <>
-                              <Text size="sm" fw={500} mt="sm" mb={4}>Split method:</Text>
+                              <Text size="sm" fw={500} mt="sm" mb={4}>{t('splitMethod')}</Text>
                               <SegmentedControl
                                 fullWidth
                                 size="xs"
@@ -1085,9 +1087,9 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                                   }
                                 }}
                                 data={[
-                                  { label: 'Equal', value: 'equal' },
-                                  { label: 'Percentage', value: 'percentage' },
-                                  { label: 'Exact', value: 'exact' },
+                                  { label: t('equal'), value: 'equal' },
+                                  { label: t('percentage'), value: 'percentage' },
+                                  { label: t('exact'), value: 'exact' },
                                 ]}
                               />
                               {editSplitType !== 'equal' && (
@@ -1151,8 +1153,8 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         </div>
                       )}
                       <DatePickerInput
-                        label="Date"
-                        placeholder="Pick a date"
+                        label={t('date')}
+                        placeholder={t('pickDate')}
                         size="xs"
                         value={editExpenseDate}
                         onChange={setEditExpenseDate}
@@ -1162,8 +1164,8 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         maxDate={new Date()}
                       />
                       <MGroup gap="xs">
-                        <Button size="compact-sm" onClick={handleSaveExpense}>Save</Button>
-                        <Button size="compact-sm" variant="subtle" color="gray" onClick={handleCancelEditExpense}>Cancel</Button>
+                        <Button size="compact-sm" onClick={handleSaveExpense}>{t('save')}</Button>
+                        <Button size="compact-sm" variant="subtle" color="gray" onClick={handleCancelEditExpense}>{t('cancel')}</Button>
                       </MGroup>
                     </Stack>
                   ) : (
@@ -1173,13 +1175,13 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         <MGroup justify="space-between" align="center" mb={4}>
                           <MGroup gap="xs">
                             {isPending(expense) && (
-                              <Badge size="sm" color="orange" variant="light">⏳ Pending</Badge>
+                              <Badge size="sm" color="orange" variant="light">⏳ {t('pendingBadge')}</Badge>
                             )}
                             {expense.expense_type === 'transfer' && (
-                              <Badge size="sm" color="green" variant="light">💸 Transfer</Badge>
+                              <Badge size="sm" color="green" variant="light">💸 {t('transferBadge')}</Badge>
                             )}
                             {expense.expense_type === 'income' && (
-                              <Badge size="sm" color="yellow" variant="light">💰 Income</Badge>
+                              <Badge size="sm" color="yellow" variant="light">💰 {t('incomeBadge')}</Badge>
                             )}
                             <Text fw={600}>{expense.description}</Text>
                           </MGroup>
@@ -1202,12 +1204,12 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         </MGroup>
                         <Text size="sm" c="dimmed">
                           {expense.expense_type === 'transfer' ? (
-                            <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</>
+                            <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : t('unknown')}</>
                           ) : (
                             <>
-                              {expense.expense_type === 'income' ? 'Received by' : 'Paid by'}: {getMemberName(expense.paid_by)}
+                              {expense.expense_type === 'income' ? t('receivedByName', { name: getMemberName(expense.paid_by) }) : t('paidBy', { name: getMemberName(expense.paid_by) })}
                               {' · '}
-                              Split: {expense.split_between.map(getMemberName).join(', ')}
+                              {t('splitLabel')} {expense.split_between.map(getMemberName).join(', ')}
                             </>
                           )}
                           {' · '}
@@ -1220,18 +1222,18 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                           <MGroup gap="xs">
                             <Text size="sm">{getMemberName(expense.paid_by)}</Text>
                             <Text size="sm" c="dimmed">→</Text>
-                            <Text size="sm">{expense.transfer_to ? getMemberName(expense.transfer_to) : 'Unknown'}</Text>
+                            <Text size="sm">{expense.transfer_to ? getMemberName(expense.transfer_to) : t('unknown')}</Text>
                             <Text size="sm" fw={600} c="blue">{fmtAmt(expense.amount, expense.currency)}</Text>
                           </MGroup>
                         ) : (
                           <Stack gap={4}>
                             <Text size="sm" fw={500} c="dimmed">
-                              {expense.expense_type === 'income' ? 'Received by' : 'Paid by'} {getMemberName(expense.paid_by)}
+                              {expense.expense_type === 'income' ? t('receivedByName', { name: getMemberName(expense.paid_by) }) : t('paidBy', { name: getMemberName(expense.paid_by) })}
                               {expense.split_type && expense.split_type !== 'equal' && (
-                                <Text component="span" size="xs" c="dimmed"> · {expense.split_type === 'percentage' ? '% split' : 'exact split'}</Text>
+                                <Text component="span" size="xs" c="dimmed"> · {expense.split_type === 'percentage' ? t('percentSplit') : t('exactSplit')}</Text>
                               )}
                               {expense.currency !== group.currency && (
-                                <Text component="span" size="xs" c="dimmed"> · Rate: 1 {expense.currency} = {expense.exchange_rate.toFixed(4)} {group.currency}</Text>
+                                <Text component="span" size="xs" c="dimmed"> · {t('rateInfo', { from: expense.currency, rate: expense.exchange_rate.toFixed(4), to: group.currency })}</Text>
                               )}
                             </Text>
                             {expense.split_between.map(memberId => {
@@ -1281,7 +1283,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
             {settlements.length > 0 && (
               <Paper p="sm" radius="md" bg="light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))" mb="xs">
                 <Text size="sm" c="dimmed" ta="center">
-                  {settlements.length} transfer{settlements.length !== 1 ? 's' : ''} needed to settle all debts
+                  {t('transfersNeeded', { count: settlements.length })}
                 </Text>
               </Paper>
             )}
@@ -1316,7 +1318,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       <Text fw={600}>
                         {balance.user_name}
                         {balance.user_id === selectedMemberId && (
-                          <Text component="span" c="light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-3))" fw={500}> (you)</Text>
+                          <Text component="span" c="light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-3))" fw={500}> {t('youLabel')}</Text>
                         )}
                       </Text>
                     </MGroup>
@@ -1332,7 +1334,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         return (
                           <div key={`owe-${i}`}>
                             <MGroup gap="xs">
-                              <Text size="sm" c="red">→ Pay</Text>
+                              <Text size="sm" c="red">→ {t('pay')}</Text>
                               <Text size="sm" fw={500}>{o.name}</Text>
                               <Text size="sm" fw={600} c="red">{fmtAmt(o.amount, group.currency)}</Text>
                             </MGroup>
@@ -1347,7 +1349,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
-                                  Pay via PayPal →
+                                  {t('payViaPaypal')}
                                 </Anchor>
                               </MGroup>
                             )}
@@ -1357,7 +1359,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                                 <Text size="xs" ff="monospace">{recipient.iban}</Text>
                                 <CopyButton value={recipient.iban}>
                                   {({ copied, copy }) => (
-                                    <Tooltip label={copied ? 'Copied!' : 'Copy IBAN'}>
+                                    <Tooltip label={copied ? t('copied') : t('copyIBAN')}>
                                       <Button size="compact-xs" variant="subtle" onClick={(e) => { e.stopPropagation(); copy(); }}>
                                         {copied ? '✓' : '📋'}
                                       </Button>
@@ -1372,26 +1374,26 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                                   <Stack gap="xs">
                                     <Select
                                       size="xs"
-                                      placeholder="Select group"
+                                      placeholder={t('selectGroup')}
                                       data={otherGroups.map(g => ({ value: g.id, label: g.name }))}
                                       value={crossGroupTransfer.targetGroupId}
                                       onChange={(val) => val && handleSelectTargetGroup(val)}
                                     />
-                                    {crossGroupTransfer.loading && <Text size="xs" c="dimmed">Loading members...</Text>}
+                                    {crossGroupTransfer.loading && <Text size="xs" c="dimmed">{t('loadingMembers')}</Text>}
                                     {crossGroupTransfer.targetGroupMembers.length > 0 && (
                                       <>
                                         <Select
                                           size="xs"
-                                          label={`Who is ${o.name} in ${crossGroupTransfer.targetGroupName}?`}
-                                          placeholder="Select member"
+                                          label={t('whoIsMemberInGroup', { name: o.name, group: crossGroupTransfer.targetGroupName })}
+                                          placeholder={t('selectMember')}
                                           data={crossGroupTransfer.targetGroupMembers.map(m => ({ value: m.id, label: m.name }))}
                                           value={crossGroupTransfer.creditorInTargetId}
                                           onChange={(val) => setCrossGroupTransfer(prev => prev ? { ...prev, creditorInTargetId: val } : null)}
                                         />
                                         <Select
                                           size="xs"
-                                          label={`Who is ${balance.user_name} in ${crossGroupTransfer.targetGroupName}?`}
-                                          placeholder="Select member"
+                                          label={t('whoIsMemberInGroup', { name: balance.user_name, group: crossGroupTransfer.targetGroupName })}
+                                          placeholder={t('selectMember')}
                                           data={crossGroupTransfer.targetGroupMembers.filter(m => m.id !== crossGroupTransfer.creditorInTargetId).map(m => ({ value: m.id, label: m.name }))}
                                           value={crossGroupTransfer.myIdInTarget}
                                           onChange={(val) => setCrossGroupTransfer(prev => prev ? { ...prev, myIdInTarget: val } : null)}
@@ -1403,7 +1405,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                                             disabled={!crossGroupTransfer.creditorInTargetId || !crossGroupTransfer.myIdInTarget}
                                             onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleConfirmCrossGroupTransfer(); }}
                                           >
-                                            Transfer {fmtAmt(o.amount, group.currency)}
+                                            {t('transferAmount', { amount: fmtAmt(o.amount, group.currency) })}
                                           </Button>
                                           <Button
                                             size="compact-xs"
@@ -1411,7 +1413,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                                             color="gray"
                                             onClick={(e: React.MouseEvent) => { e.stopPropagation(); setCrossGroupTransfer(null); }}
                                           >
-                                            Cancel
+                                            {t('cancel')}
                                           </Button>
                                         </MGroup>
                                       </>
@@ -1430,7 +1432,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                                       handleStartCrossGroupTransfer(balance.user_id, balance.user_name, o.id, o.name, o.amount);
                                     }}
                                   >
-                                    Transfer to another group →
+                                    {t('transferToOtherGroup')}
                                   </Button>
                                 </MGroup>
                               )
@@ -1441,24 +1443,24 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       {owedBy.map((o, i) => (
                         <MGroup key={`owed-${i}`} gap="xs" justify="space-between">
                           <MGroup gap="xs">
-                            <Text size="sm" c="green">← Receive from</Text>
+                            <Text size="sm" c="green">← {t('receiveFrom')}</Text>
                             <Text size="sm" fw={500}>{o.name}</Text>
                             <Text size="sm" fw={600} c="green">{fmtAmt(o.amount, group.currency)}</Text>
                           </MGroup>
-                          <Tooltip label={`Record that ${o.name} paid ${balance.user_name}`}>
+                          <Tooltip label={t('recordPayment', { from: o.name, to: balance.user_name })}>
                             <Button
                               size="compact-xs"
                               variant="light"
                               color="green"
                               onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleMarkReceived(o.id, o.name, balance.user_id, balance.user_name, o.amount); }}
                             >
-                              ✓ Received
+                              {t('received')}
                             </Button>
                           </Tooltip>
                         </MGroup>
                       ))}
                       {!hasSettlements && (
-                        <Text size="sm" c="dimmed">All settled up! 🎉</Text>
+                        <Text size="sm" c="dimmed">{t('allSettled')}</Text>
                       )}
                     </Stack>
                   </Collapse>
@@ -1487,7 +1489,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   <Text fw={600}>
                     {member.name}
                     {member.id === selectedMemberId && (
-                      <Text component="span" c="light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-3))" fw={500}> (you)</Text>
+                      <Text component="span" c="light-dark(var(--mantine-color-blue-7), var(--mantine-color-blue-3))" fw={500}> {t('youLabel')}</Text>
                     )}
                   </Text>
                   <MGroup gap="xs">
@@ -1506,21 +1508,21 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                     <Stack gap="xs">
                       <TextInput
                         size="xs"
-                        placeholder="PayPal email or PayPal.me username"
+                        placeholder={t('paypalPlaceholder')}
                         leftSection={<Text size="xs">💳</Text>}
                         value={editPaypal}
                         onChange={(e) => setEditPaypal(e.target.value)}
                       />
                       <TextInput
                         size="xs"
-                        placeholder="IBAN"
+                        placeholder={t('ibanPlaceholder')}
                         leftSection={<Text size="xs">🏦</Text>}
                         value={editIban}
                         onChange={(e) => setEditIban(e.target.value)}
                       />
                       <MGroup gap="xs">
-                        <Button size="compact-xs" onClick={() => handleSavePayment(member.id)}>Save</Button>
-                        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditingPayment(null)}>Cancel</Button>
+                        <Button size="compact-xs" onClick={() => handleSavePayment(member.id)}>{t('save')}</Button>
+                        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditingPayment(null)}>{t('cancel')}</Button>
                       </MGroup>
                     </Stack>
                   </>
@@ -1537,7 +1539,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                           <Text size="xs" c="dimmed">IBAN: {member.iban}</Text>
                           <CopyButton value={member.iban}>
                             {({ copied, copy }) => (
-                              <Tooltip label={copied ? 'Copied!' : 'Copy IBAN'}>
+                              <Tooltip label={copied ? t('copied') : t('copyIBAN')}>
                                 <Button size="compact-xs" variant="subtle" onClick={copy}>
                                   {copied ? '✓' : '📋'}
                                 </Button>
@@ -1558,12 +1560,12 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
               <form onSubmit={handleAddMember}>
                 <MGroup gap="xs">
                   <TextInput
-                    placeholder="Add new member..."
+                    placeholder={t('addNewMember')}
                     value={newMemberName}
                     onChange={(e) => setNewMemberName(e.target.value)}
                     style={{ flex: 1 }}
                   />
-                  <Button type="submit" variant="light">Add</Button>
+                  <Button type="submit" variant="light">{t('add')}</Button>
                 </MGroup>
               </form>
             </>
@@ -1572,7 +1574,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
             <>
               <Divider my="md" />
               <Button color="red" variant="light" fullWidth onClick={handleDeleteGroup}>
-                🗑️ Delete Group
+                {t('deleteGroup')}
               </Button>
             </>
           )}
@@ -1580,38 +1582,38 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       </Tabs>
 
       {/* Share Link Modal */}
-      <Modal opened={shareModalOpened} onClose={closeShareModal} title="Share this group" centered size="md">
+      <Modal opened={shareModalOpened} onClose={closeShareModal} title={t('shareThisGroup')} centered size="md">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            Choose which permissions to give people who use this link.
+            {t('sharePermissionsDesc')}
           </Text>
           <Stack gap="xs">
             <Switch
-              label="Delete group"
+              label={t('permDeleteGroup')}
               checked={sharePerms.can_delete_group}
               onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_delete_group: v })); }}
               disabled={!permissions.can_delete_group}
             />
             <Switch
-              label="Add / remove members"
+              label={t('permManageMembers')}
               checked={sharePerms.can_manage_members}
               onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_manage_members: v })); }}
               disabled={!permissions.can_manage_members}
             />
             <Switch
-              label="Update payment info"
+              label={t('permUpdatePayment')}
               checked={sharePerms.can_update_payment}
               onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_update_payment: v })); }}
               disabled={!permissions.can_update_payment}
             />
             <Switch
-              label="Add expenses"
+              label={t('permAddExpenses')}
               checked={sharePerms.can_add_expenses}
               onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_add_expenses: v })); }}
               disabled={!permissions.can_add_expenses}
             />
             <Switch
-              label="Edit / remove expenses"
+              label={t('permEditExpenses')}
               checked={sharePerms.can_edit_expenses}
               onChange={(e) => { const v = e.currentTarget.checked; setSharePerms(p => ({ ...p, can_edit_expenses: v })); }}
               disabled={!permissions.can_edit_expenses}
@@ -1619,7 +1621,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
           </Stack>
           {!generatedShareUrl ? (
             <Button onClick={handleGenerateShareLink} fullWidth>
-              Generate Share Link
+              {t('generateShareLink')}
             </Button>
           ) : (
             <Stack gap="xs">
@@ -1636,7 +1638,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
               <CopyButton value={generatedShareUrl}>
                 {({ copied, copy }) => (
                   <Button color={copied ? 'teal' : 'blue'} onClick={copy} fullWidth>
-                    {copied ? '✓ Copied!' : 'Copy Link'}
+                    {copied ? `✓ ${t('copied')}` : t('copyLink')}
                   </Button>
                 )}
               </CopyButton>
@@ -1645,15 +1647,15 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
 
           {existingShareLinks.length > 0 && (
             <>
-              <Divider label="Existing share links" labelPosition="center" />
+              <Divider label={t('existingShareLinks')} labelPosition="center" />
               <Stack gap="xs">
                 {existingShareLinks.map(link => {
                   const permLabels: string[] = [];
-                  if (link.can_add_expenses) permLabels.push('Add');
-                  if (link.can_edit_expenses) permLabels.push('Edit');
-                  if (link.can_update_payment) permLabels.push('Payment');
-                  if (link.can_manage_members) permLabels.push('Members');
-                  if (link.can_delete_group) permLabels.push('Delete');
+                  if (link.can_add_expenses) permLabels.push(t('permBadgeAdd'));
+                  if (link.can_edit_expenses) permLabels.push(t('permBadgeEdit'));
+                  if (link.can_update_payment) permLabels.push(t('permBadgePayment'));
+                  if (link.can_manage_members) permLabels.push(t('permBadgeMembers'));
+                  if (link.can_delete_group) permLabels.push(t('permBadgeDelete'));
                   const url = `${window.location.origin}/#join=${link.code}`;
                   return (
                     <Paper key={link.code} p="xs" withBorder radius="sm">
@@ -1669,7 +1671,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         <MGroup gap={4} wrap="nowrap">
                           <CopyButton value={url}>
                             {({ copied, copy }) => (
-                              <Tooltip label={copied ? 'Copied!' : 'Copy link'}>
+                              <Tooltip label={copied ? t('copied') : t('copyLink')}>
                                 <ActionIcon size="sm" variant="subtle" color={copied ? 'teal' : 'gray'} onClick={copy}>
                                   {copied ? '✓' : '📋'}
                                 </ActionIcon>
