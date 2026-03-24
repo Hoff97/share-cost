@@ -1190,6 +1190,34 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                             {expense.currency !== group.currency && (
                               <Text size="xs" c="dimmed">≈ {fmtAmt(expense.amount * expense.exchange_rate, group.currency)}</Text>
                             )}
+                            {(() => {
+                              if (!selectedMemberId) return null;
+                              let yourShare: number | null = null;
+                              if (expense.expense_type === 'transfer') {
+                                if (expense.paid_by === selectedMemberId) yourShare = -expense.amount * expense.exchange_rate;
+                                else if (expense.transfer_to === selectedMemberId) yourShare = expense.amount * expense.exchange_rate;
+                              } else if (expense.split_between.includes(selectedMemberId)) {
+                                const splitEntry = expense.splits?.find(s => s.member_id === selectedMemberId);
+                                let share: number;
+                                if (expense.split_type === 'percentage' && splitEntry?.share != null) {
+                                  share = expense.amount * splitEntry.share / 100;
+                                } else if (expense.split_type === 'exact' && splitEntry?.share != null) {
+                                  share = splitEntry.share;
+                                } else {
+                                  share = expense.amount / expense.split_between.length;
+                                }
+                                yourShare = expense.expense_type === 'income' ? share * expense.exchange_rate : -share * expense.exchange_rate;
+                              }
+                              if (yourShare == null) return null;
+                              return (
+                                <>
+                                  <Text size="sm" c="dimmed" fw={400}>/</Text>
+                                  <Text size="sm" c={yourShare >= 0 ? 'teal' : 'red'} fw={600}>
+                                    {fmtAmt(yourShare, group.currency)}
+                                  </Text>
+                                </>
+                              );
+                            })()}
                             {!isPending(expense) && permissions.can_edit_expenses && (
                               <>
                                 <ActionIcon size="sm" variant="subtle" color="gray" onClick={(e) => { e.stopPropagation(); handleStartEditExpense(expense); }}>
