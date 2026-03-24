@@ -122,6 +122,7 @@
   "copyLink": "Copia link",
 
   "existingShareLinks": "Link di condivisione esistenti",
+  "oldShareLink": "Vecchio link di condivisione (codice più corto)",
   "permBadgeAdd": "Agg.",
   "permBadgeEdit": "Mod.",
   "permBadgePayment": "Pag.",

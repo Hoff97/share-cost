@@ -16,7 +16,7 @@ import type { Group, Expense, Balance, Permissions, ShareLinkItem } from '../off
 import { ExpenseCard } from './ExpenseCard';
 import { computeUserShare } from '../expenseUtils';
 import { useSync } from '../sync';
-import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, updateLastCheckedAt, getStoredPaymentInfo, savePaymentInfo } from '../storage';
+import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, updateLastCheckedAt, getStoredPaymentInfo, savePaymentInfo, setShowMyExpensesOnly as setShowMyExpensesOnlyStorage } from '../storage';
 
 interface GroupDetailProps {
   group: Group;
@@ -89,7 +89,10 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [splitType, setSplitType] = useState('equal');
   const [splitShares, setSplitShares] = useState<Record<string, number>>({});
-  const [showMyExpensesOnly, setShowMyExpensesOnly] = useState(false);
+  const [showMyExpensesOnly, setShowMyExpensesOnly] = useState(() => {
+    const stored = getStoredGroup(group.id);
+    return stored?.showMyExpensesOnly ?? false;
+  });
   const [lastCheckedAt] = useState<string | null>(() => {
     const stored = getStoredGroup(group.id);
     return stored?.lastCheckedAt ?? null;
@@ -935,7 +938,10 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
               <Checkbox
                 label={t('showMyExpensesOnly')}
                 checked={showMyExpensesOnly}
-                onChange={(e) => setShowMyExpensesOnly(e.currentTarget.checked)}
+                onChange={(e) => {
+                  setShowMyExpensesOnly(e.currentTarget.checked);
+                  setShowMyExpensesOnlyStorage(group.id, e.currentTarget.checked);
+                }}
                 size="sm"
               />
             </MGroup>
@@ -1388,11 +1394,19 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   if (link.can_manage_members) permLabels.push(t('permBadgeMembers'));
                   if (link.can_delete_group) permLabels.push(t('permBadgeDelete'));
                   const url = `${window.location.origin}/#join=${link.code}`;
+                  const isOldLink = link.code.length < 20;
                   return (
                     <Paper key={link.code} p="xs" withBorder radius="sm">
                       <MGroup justify="space-between" wrap="nowrap" gap="xs">
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <Text size="xs" truncate="end" ff="monospace">{link.code}</Text>
+                          <MGroup gap={4} wrap="nowrap">
+                            <Text size="xs" truncate="end" ff="monospace">{link.code}</Text>
+                            {isOldLink && (
+                              <Tooltip label={t('oldShareLink')}>
+                                <Badge size="xs" variant="light" color="yellow" circle>!</Badge>
+                              </Tooltip>
+                            )}
+                          </MGroup>
                           <MGroup gap={4} mt={2}>
                             {permLabels.map(l => (
                               <Badge key={l} size="xs" variant="light">{l}</Badge>

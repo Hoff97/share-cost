@@ -22,7 +22,7 @@ const getTokenFromUrl = (): string | null => {
 // Extract share code from URL hash (used for new short share links)
 const getShareCodeFromUrl = (): string | null => {
   const hash = window.location.hash;
-  const match = hash.match(/^#join=([A-Za-z0-9]{16})$/);
+  const match = hash.match(/^#join=([A-Za-z0-9]{16,20})$/);
   return match ? match[1] : null;
 };
 

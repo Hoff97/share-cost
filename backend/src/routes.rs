@@ -799,8 +799,9 @@ async fn generate_share_link(
     let ee = effective.has_edit_expenses();
 
     // Return an existing share link if one already exists with the same group + permissions
+    // Exclude old 16-char codes so a new 20-char code is generated instead
     let existing: Option<String> = sqlx::query_scalar(
-        "SELECT code FROM share_links WHERE group_id = $1 AND can_delete_group = $2 AND can_manage_members = $3 AND can_update_payment = $4 AND can_add_expenses = $5 AND can_edit_expenses = $6 LIMIT 1"
+        "SELECT code FROM share_links WHERE group_id = $1 AND can_delete_group = $2 AND can_manage_members = $3 AND can_update_payment = $4 AND can_add_expenses = $5 AND can_edit_expenses = $6 AND LENGTH(code) >= 20 LIMIT 1"
     )
     .bind(auth.group_id)
     .bind(dg)
@@ -825,9 +826,9 @@ async fn generate_share_link(
         }));
     }
 
-    // Generate a unique 16-char code (retry on collision)
+    // Generate a unique 20-char code (retry on collision)
     let code = loop {
-        let candidate = random_code(16);
+        let candidate = random_code(20);
         let exists: bool =
             sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM share_links WHERE code = $1)")
                 .bind(&candidate)

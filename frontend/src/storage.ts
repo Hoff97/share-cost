@@ -14,6 +14,7 @@ export interface StoredGroup {
   lastCheckedAt?: string;
   latestActivityAt?: string;
   newActivityCount?: number;
+  showMyExpensesOnly?: boolean;
 }
 
 export const getStoredGroups = (): StoredGroup[] => {
@@ -86,6 +87,15 @@ export const updateCachedBalance = (groupId: string, balance: number, currency?:
 
 export const getStoredGroup = (groupId: string): StoredGroup | undefined => {
   return getStoredGroups().find(g => g.id === groupId);
+};
+
+export const setShowMyExpensesOnly = (groupId: string, value: boolean): void => {
+  const groups = getStoredGroups();
+  const group = groups.find(g => g.id === groupId);
+  if (group) {
+    group.showMyExpensesOnly = value;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
+  }
 };
 
 export const updateLastCheckedAt = (groupId: string): void => {
