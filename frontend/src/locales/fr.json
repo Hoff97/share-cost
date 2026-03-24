@@ -129,6 +129,11 @@
   "permBadgeDelete": "Suppr.",
 
   "confirmDeleteGroup": "Voulez-vous vraiment supprimer définitivement ce groupe et toutes ses données ?",
+  "confirmDeleteExpenseTitle": "Supprimer la dépense",
+  "confirmDeleteExpense": "Voulez-vous vraiment supprimer cette dépense ?",
+  "deleteGroupTitle": "Supprimer le groupe",
+  "deleteGroupIrreversible": "Cette action est irréversible. Toutes les dépenses, membres et données seront définitivement supprimés.",
+  "deleteGroupEnterName": "Tapez le nom du groupe \"{{name}}\" pour confirmer.",
   "failedDeleteGroup": "Impossible de supprimer le groupe. Vous n'avez peut-être pas la permission.",
   "failedShareLink": "Impossible de générer le lien de partage. Veuillez réessayer.",
   "failedDeleteShareLink": "Impossible de supprimer le lien de partage.",

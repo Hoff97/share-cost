@@ -129,6 +129,11 @@
   "permBadgeDelete": "Elim.",
 
   "confirmDeleteGroup": "¿Estás seguro de que quieres eliminar permanentemente este grupo y todos sus datos?",
+  "confirmDeleteExpenseTitle": "Eliminar gasto",
+  "confirmDeleteExpense": "¿Estás seguro de que quieres eliminar este gasto?",
+  "deleteGroupTitle": "Eliminar grupo",
+  "deleteGroupIrreversible": "Esta acción es irreversible. Todos los gastos, miembros y datos se eliminarán permanentemente.",
+  "deleteGroupEnterName": "Escribe el nombre del grupo \"{{name}}\" para confirmar.",
   "failedDeleteGroup": "No se pudo eliminar el grupo. Es posible que no tengas permiso.",
   "failedShareLink": "No se pudo generar el enlace. Inténtalo de nuevo.",
   "failedDeleteShareLink": "No se pudo eliminar el enlace de invitación.",

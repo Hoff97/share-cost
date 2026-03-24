@@ -129,6 +129,11 @@
   "permBadgeDelete": "Usuń",
 
   "confirmDeleteGroup": "Czy na pewno chcesz trwale usunąć tę grupę i wszystkie jej dane?",
+  "confirmDeleteExpenseTitle": "Usuń wydatek",
+  "confirmDeleteExpense": "Czy na pewno chcesz usunąć ten wydatek?",
+  "deleteGroupTitle": "Usuń grupę",
+  "deleteGroupIrreversible": "Ta operacja jest nieodwracalna. Wszystkie wydatki, członkowie i dane zostaną trwale usunięte.",
+  "deleteGroupEnterName": "Wpisz nazwę grupy \"{{name}}\", aby potwierdzić.",
   "failedDeleteGroup": "Nie udało się usunąć grupy. Możliwe, że nie masz uprawnień.",
   "failedShareLink": "Nie udało się wygenerować linku. Spróbuj ponownie.",
   "failedDeleteShareLink": "Nie udało się usunąć linku zaproszenia.",

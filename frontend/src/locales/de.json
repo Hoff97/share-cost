@@ -129,6 +129,11 @@
   "permBadgeDelete": "Löschen",
 
   "confirmDeleteGroup": "Möchtest du diese Gruppe und alle zugehörigen Daten endgültig löschen?",
+  "confirmDeleteExpenseTitle": "Ausgabe löschen",
+  "confirmDeleteExpense": "Möchtest du diese Ausgabe wirklich löschen?",
+  "deleteGroupTitle": "Gruppe löschen",
+  "deleteGroupIrreversible": "Diese Aktion kann nicht rückgängig gemacht werden. Alle Ausgaben, Mitglieder und Daten werden dauerhaft gelöscht.",
+  "deleteGroupEnterName": "Gib den Gruppennamen \"{{name}}\" ein, um zu bestätigen.",
   "failedDeleteGroup": "Gruppe konnte nicht gelöscht werden. Möglicherweise fehlt die Berechtigung.",
   "failedShareLink": "Einladungslink konnte nicht erstellt werden. Bitte versuche es erneut.",
   "failedDeleteShareLink": "Einladungslink konnte nicht gelöscht werden.",

@@ -129,6 +129,11 @@
   "permBadgeDelete": "Weg",
 
   "confirmDeleteGroup": "Wuist de Grubbm und oiss wos dazughört wirkli für immer weghaun?",
+  "confirmDeleteExpenseTitle": "Ausgob löscha",
+  "confirmDeleteExpense": "Wuist de Ausgob wirkli löscha?",
+  "deleteGroupTitle": "Grubbm löscha",
+  "deleteGroupIrreversible": "Des kosd ned rückgängig gmocht wern. Olle Ausgom, Leidln und Datn werdn für immer glöscht.",
+  "deleteGroupEnterName": "Gib an Grubbmnam \"{{name}}\" ei, zum Bestätign.",
   "failedDeleteGroup": "Grubbm konnts ned weghaun. Vielleicht hast ned de Rechte dazua.",
   "failedShareLink": "Link geht ned. Probiers noamoi.",
   "failedDeleteShareLink": "Link konnts ned löscha.",

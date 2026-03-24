@@ -65,6 +65,12 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const { t } = useTranslation();
   const colorScheme = useComputedColorScheme('light');
   const [activeTab, setActiveTab] = useQueryState('tab', parseAsStringLiteral(['expenses', 'balances', 'members'] as const).withDefault('expenses'));
+
+  // Reset tab to expenses when opening a group
+  useEffect(() => {
+    setActiveTab('expenses');
+  }, [group.id]);
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [description, setDescription] = useState('');
@@ -288,10 +294,13 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     }
   };
 
+  const [deleteGroupModalOpened, { open: openDeleteGroupModal, close: closeDeleteGroupModal }] = useDisclosure(false);
+  const [deleteGroupConfirmName, setDeleteGroupConfirmName] = useState('');
+
   const handleDeleteGroup = async () => {
-    if (!confirm(t('confirmDeleteGroup'))) return;
     try {
       await api.deleteGroup(token);
+      closeDeleteGroupModal();
       onGroupDeleted?.();
     } catch {
       alert(t('failedDeleteGroup'));
@@ -385,8 +394,11 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     loadData();
   };
 
+  const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
+
   const handleDeleteExpense = async (expenseId: string) => {
     await api.deleteExpense(token, group.id, expenseId);
+    setDeleteExpenseId(null);
     loadData();
   };
 
@@ -972,7 +984,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                           onStartEdit={() => handleStartEditExpense(expense.id)}
                           onCancelEdit={handleCancelEditExpense}
                           onSaveEdit={(data) => handleSaveExpense(expense.id, data)}
-                          onDelete={() => handleDeleteExpense(expense.id)}
+                          onDelete={() => setDeleteExpenseId(expense.id)}
                           onToggleExpand={() => toggleExpenseExpanded(expense.id)}
                         />
                       ))
@@ -1292,7 +1304,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
           {permissions.can_delete_group && (
             <>
               <Divider my="md" />
-              <Button color="red" variant="light" fullWidth onClick={handleDeleteGroup}>
+              <Button color="red" variant="light" fullWidth onClick={() => { setDeleteGroupConfirmName(''); openDeleteGroupModal(); }}>
                 {t('deleteGroup')}
               </Button>
             </>
@@ -1406,6 +1418,34 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
               </Stack>
             </>
           )}
+        </Stack>
+      </Modal>
+
+      {/* Delete Expense Confirmation Modal */}
+      <Modal opened={!!deleteExpenseId} onClose={() => setDeleteExpenseId(null)} title={t('confirmDeleteExpenseTitle', { defaultValue: 'Delete Expense' })} centered size="sm">
+        <Stack gap="md">
+          <Text size="sm">{t('confirmDeleteExpense', { defaultValue: 'Are you sure you want to delete this expense?' })}</Text>
+          <MGroup justify="flex-end" gap="xs">
+            <Button variant="subtle" color="gray" onClick={() => setDeleteExpenseId(null)}>{t('cancel')}</Button>
+            <Button color="red" onClick={() => deleteExpenseId && handleDeleteExpense(deleteExpenseId)}>{t('deleteExpense')}</Button>
+          </MGroup>
+        </Stack>
+      </Modal>
+
+      {/* Delete Group Confirmation Modal */}
+      <Modal opened={deleteGroupModalOpened} onClose={closeDeleteGroupModal} title={t('deleteGroupTitle', { defaultValue: 'Delete Group' })} centered size="sm">
+        <Stack gap="md">
+          <Text size="sm" c="red" fw={600}>{t('deleteGroupIrreversible', { defaultValue: 'This action is irreversible. All expenses, members, and data will be permanently deleted.' })}</Text>
+          <Text size="sm">{t('deleteGroupEnterName', { defaultValue: 'Type the group name "{{name}}" to confirm.', name: group.name })}</Text>
+          <TextInput
+            placeholder={group.name}
+            value={deleteGroupConfirmName}
+            onChange={(e) => setDeleteGroupConfirmName(e.target.value)}
+          />
+          <MGroup justify="flex-end" gap="xs">
+            <Button variant="subtle" color="gray" onClick={closeDeleteGroupModal}>{t('cancel')}</Button>
+            <Button color="red" disabled={deleteGroupConfirmName !== group.name} onClick={handleDeleteGroup}>{t('deleteGroup')}</Button>
+          </MGroup>
         </Stack>
       </Modal>
     </Stack>

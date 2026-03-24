@@ -493,8 +493,8 @@ export function ExpenseCard({
                         {expense.currency !== groupCurrency && (
                           <Text size="xs" c="dimmed">{fmtAmt(share, expense.currency)} ≈</Text>
                         )}
-                        <Text size="sm" fw={500} c="red">
-                          -{fmtAmt(shareInGroup, groupCurrency)}
+                        <Text size="sm" fw={500} c={expense.expense_type === 'income' ? 'teal' : 'red'}>
+                          {expense.expense_type === 'income' ? '+' : '-'}{fmtAmt(shareInGroup, groupCurrency)}
                         </Text>
                       </MGroup>
                     </MGroup>
