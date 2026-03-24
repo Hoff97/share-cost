@@ -70,6 +70,10 @@
   "addIncome": "Add Income",
   "addExpense": "Add Expense",
   "noExpenses": "No expenses yet. Add one above!",
+  "showMyExpensesOnly": "Show my entries only",
+  "noMatchingExpenses": "No matching entries.",
+  "totalExpenses": "Total expenses",
+  "yourTotal": "Your total",
 
   "pendingBadge": "Pending",
   "transferBadge": "Transfer",

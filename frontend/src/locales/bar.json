@@ -70,6 +70,10 @@
   "addIncome": "Diridari eintragn",
   "addExpense": "Ausgab eintragn",
   "noExpenses": "No nix ausgem. Trag obn wos ei!",
+  "showMyExpensesOnly": "Bloß meine Sach",
+  "noMatchingExpenses": "Nix gfundn.",
+  "totalExpenses": "Ois zamm",
+  "yourTotal": "Dei Anteil",
 
   "pendingBadge": "Wartet no",
   "transferBadge": "Überweisung",

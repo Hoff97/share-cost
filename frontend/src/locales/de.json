@@ -70,6 +70,10 @@
   "addIncome": "Einnahme hinzufügen",
   "addExpense": "Ausgabe hinzufügen",
   "noExpenses": "Noch keine Ausgaben. Füge oben eine hinzu!",
+  "showMyExpensesOnly": "Nur meine Einträge",
+  "noMatchingExpenses": "Keine passenden Einträge.",
+  "totalExpenses": "Gesamtausgaben",
+  "yourTotal": "Dein Anteil",
 
   "pendingBadge": "Ausstehend",
   "transferBadge": "Überweisung",

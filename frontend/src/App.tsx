@@ -8,7 +8,7 @@ import { CreateGroup } from './components/CreateGroup';
 import { GroupDetail } from './components/GroupDetail';
 import { GroupList } from './components/GroupList';
 import type { StoredGroup } from './storage';
-import { getStoredGroups, saveGroup, removeGroup, updateLastCheckedAt } from './storage';
+import { getStoredGroups, saveGroup, removeGroup, updateLastCheckedAt, setSelectedMember, getStoredGroup } from './storage';
 import { SyncProvider, useSync } from './sync';
 
 // Extract token from URL hash (used for old-style share links)
@@ -197,6 +197,26 @@ function AppContent() {
     api.prefetchAllGroups().then(() => setStoredGroups(getStoredGroups()));
   }, []);
 
+  // Auto-match user identity from other groups when entering a new group
+  const autoMatchMember = (groupData: Group, groupId: string) => {
+    // Skip if already has a selection for this group
+    const existing = getStoredGroup(groupId);
+    if (existing?.selectedMemberId) return;
+    // Find a selectedMemberName from any other stored group
+    const allStored = getStoredGroups();
+    const knownName = allStored.find(g => g.id !== groupId && g.selectedMemberName)?.selectedMemberName;
+    if (!knownName) return;
+    const lower = knownName.toLowerCase();
+    // Try exact match, then first-name match
+    const exact = groupData.members.find(m => m.name.toLowerCase() === lower);
+    if (exact) { setSelectedMember(groupId, exact.id, exact.name); return; }
+    const firstName = lower.split(/\s+/)[0];
+    const prefix = groupData.members.find(m => m.name.toLowerCase().split(/\s+/)[0] === firstName);
+    if (prefix) { setSelectedMember(groupId, prefix.id, prefix.name); return; }
+    const contains = groupData.members.find(m => m.name.toLowerCase().includes(lower) || lower.includes(m.name.toLowerCase()));
+    if (contains) { setSelectedMember(groupId, contains.id, contains.name); }
+  };
+
   const redeemCode = async (code: string) => {
     setLoading(true);
     setError(null);
@@ -223,6 +243,7 @@ function AppContent() {
         setGroup(groupData);
         setToken(finalToken);
         saveGroup(groupData.id, groupData.name, finalToken);
+        autoMatchMember(groupData, groupData.id);
         setStoredGroups(getStoredGroups());
       } else {
         setError(t('invalidShareLink'));

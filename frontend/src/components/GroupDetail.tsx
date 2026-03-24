@@ -12,7 +12,8 @@ import { useTranslation } from 'react-i18next';
 import 'dayjs/locale/de';
 import * as api from '../offlineApi';
 import type { Group, Expense, Balance, Permissions, ShareLinkItem } from '../offlineApi';
-import { isPending } from '../offlineApi';
+import { ExpenseCard } from './ExpenseCard';
+import { computeUserShare } from '../expenseUtils';
 import { useSync } from '../sync';
 import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
 
@@ -23,11 +24,6 @@ interface GroupDetailProps {
   onGroupDeleted?: () => void;
 }
 
-// Convert YYYY-MM-DD → DD.MM.YYYY for display
-const formatDate = (iso: string) => {
-  const [y, m, d] = iso.split('-');
-  return `${d}.${m}.${y}`;
-};
 // Today as YYYY-MM-DD
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -81,21 +77,11 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const [editPaypal, setEditPaypal] = useState('');
   const [editIban, setEditIban] = useState('');
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
-  const [editDescription, setEditDescription] = useState('');
-  const [editAmount, setEditAmount] = useState<number | string>('');
-  const [editPaidBy, setEditPaidBy] = useState<string | null>(null);
-  const [editSplitBetween, setEditSplitBetween] = useState<string[]>([]);
-  const [editExpenseType, setEditExpenseType] = useState('expense');
-  const [editTransferTo, setEditTransferTo] = useState<string | null>(null);
-  const [editExpenseDate, setEditExpenseDate] = useState<string | null>(null);
   const [expenseCurrency, setExpenseCurrency] = useState(group.currency);
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [splitType, setSplitType] = useState('equal');
   const [splitShares, setSplitShares] = useState<Record<string, number>>({});
-  const [editExpenseCurrency, setEditExpenseCurrency] = useState('');
-  const [editExchangeRate, setEditExchangeRate] = useState<number>(1);
-  const [editSplitType, setEditSplitType] = useState('equal');
-  const [editSplitShares, setEditSplitShares] = useState<Record<string, number>>({});
+  const [showMyExpensesOnly, setShowMyExpensesOnly] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(() => {
     const stored = getStoredGroup(group.id);
     return stored?.selectedMemberId ?? null;
@@ -163,16 +149,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     return () => { cancelled = true; };
   }, [expenseCurrency, expenseDate, group.currency]);
 
-  // Auto-fetch exchange rate for edit form
-  useEffect(() => {
-    if (!editingExpenseId || editExpenseCurrency === group.currency) return;
-    if (!editExpenseDate) return;
-    let cancelled = false;
-    fetchRate(editExpenseCurrency, group.currency, editExpenseDate).then(rate => {
-      if (!cancelled && rate !== null) setEditExchangeRate(rate);
-    });
-    return () => { cancelled = true; };
-  }, [editExpenseCurrency, editExpenseDate, group.currency, editingExpenseId]);
+
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -348,53 +325,42 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     loadData();
   };
 
-  const handleStartEditExpense = (expense: Expense) => {
-    setEditingExpenseId(expense.id);
-    setEditDescription(expense.description);
-    setEditAmount(expense.amount);
-    setEditPaidBy(expense.paid_by);
-    setEditSplitBetween(expense.split_between);
-    setEditExpenseType(expense.expense_type);
-    setEditTransferTo(expense.transfer_to);
-    setEditExpenseDate(expense.expense_date);
-    setEditExpenseCurrency(expense.currency);
-    setEditExchangeRate(expense.exchange_rate);
-    setEditSplitType(expense.split_type || 'equal');
-    const shares: Record<string, number> = {};
-    if (expense.splits) {
-      for (const s of expense.splits) {
-        if (s.share != null) shares[s.member_id] = s.share;
-      }
-    }
-    setEditSplitShares(shares);
+  const handleStartEditExpense = (expenseId: string) => {
+    setEditingExpenseId(expenseId);
   };
 
   const handleCancelEditExpense = () => {
     setEditingExpenseId(null);
   };
 
-  const handleSaveExpense = async () => {
-    if (!editingExpenseId || !editDescription || !editAmount || !editPaidBy) return;
-    if (editExpenseType === 'transfer' && !editTransferTo) return;
-    if (editExpenseType !== 'transfer' && editSplitBetween.length === 0) return;
-
+  const handleSaveExpense = async (expenseId: string, data: {
+    description: string;
+    amount: number;
+    paidBy: string;
+    splitBetween: string[];
+    expenseType: string;
+    transferTo?: string;
+    expenseDate: string;
+    currency: string;
+    exchangeRate: number;
+    splitType: string;
+    splits?: api.SplitEntry[];
+  }) => {
     await api.updateExpense(
       token,
       group.id,
-      editingExpenseId,
-      editDescription,
-      typeof editAmount === 'string' ? parseFloat(editAmount) : editAmount,
-      editPaidBy,
-      editSplitBetween,
-      editExpenseType,
-      editExpenseType === 'transfer' ? (editTransferTo ?? undefined) : undefined,
-      editExpenseDate || todayIso(),
-      editExpenseCurrency,
-      editExchangeRate,
-      editSplitType,
-      editSplitType !== 'equal'
-        ? editSplitBetween.map(id => ({ member_id: id, share: editSplitShares[id] ?? 0 }))
-        : undefined,
+      expenseId,
+      data.description,
+      data.amount,
+      data.paidBy,
+      data.splitBetween,
+      data.expenseType,
+      data.transferTo,
+      data.expenseDate,
+      data.currency,
+      data.exchangeRate,
+      data.splitType,
+      data.splits,
     );
     setEditingExpenseId(null);
     loadData();
@@ -403,14 +369,6 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const handleDeleteExpense = async (expenseId: string) => {
     await api.deleteExpense(token, group.id, expenseId);
     loadData();
-  };
-
-  const toggleEditSplitMember = (memberId: string) => {
-    setEditSplitBetween((prev) =>
-      prev.includes(memberId)
-        ? prev.filter((id) => id !== memberId)
-        : [...prev, memberId]
-    );
   };
 
   const myBalance = selectedMemberId
@@ -941,366 +899,79 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
           </Paper>
           )}
 
+          {selectedMemberId && (
+            <MGroup gap="xs" mb="xs">
+              <Checkbox
+                label={t('showMyExpensesOnly')}
+                checked={showMyExpensesOnly}
+                onChange={(e) => setShowMyExpensesOnly(e.currentTarget.checked)}
+                size="sm"
+              />
+            </MGroup>
+          )}
+
           <Stack gap="xs">
             {expenses.length === 0 ? (
               <Text c="dimmed" ta="center" py="lg">{t('noExpenses')}</Text>
             ) : (
-              expenses.map((expense) => (
-                <Card
-                  key={expense.id}
-                  padding="sm"
-                  radius="md"
-                  withBorder
-                  style={{
-                    borderLeftWidth: 4,
-                    borderLeftColor: expense.expense_type === 'transfer'
-                      ? 'var(--mantine-color-green-6)'
-                      : expense.expense_type === 'income'
-                      ? 'var(--mantine-color-yellow-6)'
-                      : 'var(--mantine-color-blue-6)',
-                  }}
-                >
-                  {editingExpenseId === expense.id ? (
-                    /* Inline edit form */
-                    <Stack gap="sm">
-                      <SegmentedControl
-                        fullWidth
-                        value={editExpenseType}
-                        onChange={(val) => {
-                          setEditExpenseType(val);
-                          if (val === 'transfer') setEditSplitBetween([]);
-                          else setEditTransferTo(null);
-                        }}
-                        data={[
-                          { label: t('expense'), value: 'expense' },
-                          { label: t('transfer'), value: 'transfer' },
-                          { label: t('income'), value: 'income' },
-                        ]}
-                      />
-                      <TextInput
-                        placeholder={t('description')}
-                        value={editDescription}
-                        onChange={(e) => setEditDescription(e.target.value)}
-                      />
-                      <MGroup gap="xs">
-                        <NumberInput
-                          placeholder={t('amount')}
-                          min={0}
-                          step={0.01}
-                          decimalScale={2}
-                          value={editAmount}
-                          onChange={setEditAmount}
-                          leftSection={cs(editExpenseCurrency)}
-                          style={{ flex: 1 }}
+              (() => {
+                const filtered = showMyExpensesOnly && selectedMemberId
+                  ? expenses.filter(exp =>
+                      exp.paid_by === selectedMemberId ||
+                      exp.transfer_to === selectedMemberId ||
+                      exp.split_between.includes(selectedMemberId)
+                    )
+                  : expenses;
+
+                // Compute totals
+                const totalAll = expenses.reduce((sum, exp) => {
+                  const amt = exp.amount * exp.exchange_rate;
+                  if (exp.expense_type === 'transfer') return sum;
+                  return exp.expense_type === 'income' ? sum - amt : sum + amt;
+                }, 0);
+
+                const totalUser = selectedMemberId
+                  ? expenses.reduce((sum, exp) => sum + computeUserShare(exp, selectedMemberId), 0)
+                  : null;
+
+                return (
+                  <>
+                    {filtered.length === 0 ? (
+                      <Text c="dimmed" ta="center" py="lg">{t('noMatchingExpenses')}</Text>
+                    ) : (
+                      filtered.map((expense) => (
+                        <ExpenseCard
+                          key={expense.id}
+                          expense={expense}
+                          groupCurrency={group.currency}
+                          members={group.members}
+                          selectedMemberId={selectedMemberId}
+                          canEdit={permissions.can_edit_expenses}
+                          isEditing={editingExpenseId === expense.id}
+                          isExpanded={expandedExpenses.has(expense.id)}
+                          onStartEdit={() => handleStartEditExpense(expense.id)}
+                          onCancelEdit={handleCancelEditExpense}
+                          onSaveEdit={(data) => handleSaveExpense(expense.id, data)}
+                          onDelete={() => handleDeleteExpense(expense.id)}
+                          onToggleExpand={() => toggleExpenseExpanded(expense.id)}
                         />
-                        <Select
-                          data={currencyData}
-                          value={editExpenseCurrency}
-                          onChange={(val) => val && setEditExpenseCurrency(val)}
-                          w={90}
-                          searchable
-                        />
+                      ))
+                    )}
+                    <Paper p="sm" radius="md" bg="light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))" mt="xs">
+                      <MGroup justify="space-between">
+                        <Text size="sm" fw={600}>{t('totalExpenses')}</Text>
+                        <Text size="sm" fw={700} c="blue">{fmtAmt(totalAll, group.currency)}</Text>
                       </MGroup>
-                      {editExpenseCurrency !== group.currency && (
-                        <MGroup gap="xs" align="flex-end">
-                          <NumberInput
-                            label={t('exchangeRateLabel', { from: editExpenseCurrency, to: group.currency })}
-                            value={editExchangeRate}
-                            onChange={(val) => setEditExchangeRate(typeof val === 'string' ? parseFloat(val) || 1 : val)}
-                            decimalScale={6}
-                            step={0.0001}
-                            min={0}
-                            size="xs"
-                            style={{ flex: 1 }}
-                          />
-                          {typeof editAmount === 'number' && editAmount > 0 && (
-                            <Text size="xs" c="dimmed" pb={2}>
-                              ≈ {fmtAmt(editAmount * editExchangeRate, group.currency)}
-                            </Text>
-                          )}
+                      {totalUser != null && (
+                        <MGroup justify="space-between" mt={4}>
+                          <Text size="sm" fw={600}>{t('yourTotal')}</Text>
+                          <Text size="sm" fw={700} c={totalUser >= 0 ? 'teal' : 'red'}>{fmtAmt(totalUser, group.currency)}</Text>
                         </MGroup>
                       )}
-                      <Select
-                        placeholder={editExpenseType === 'transfer' ? t('fromWho') : editExpenseType === 'income' ? t('receivedBy') : t('whoPaid')}
-                        data={memberOptions}
-                        value={editPaidBy}
-                        onChange={setEditPaidBy}
-                        clearable
-                      />
-                      {editExpenseType === 'transfer' ? (
-                        <Select
-                          placeholder={t('toWho')}
-                          data={memberOptions.filter(m => m.value !== editPaidBy)}
-                          value={editTransferTo}
-                          onChange={setEditTransferTo}
-                          clearable
-                        />
-                      ) : (
-                        <div>
-                          <Text size="sm" fw={500} mb={4}>{t('splitBetween')}</Text>
-                          <Stack gap={4}>
-                            <Checkbox
-                              label={t('everyone')}
-                              fw={600}
-                              checked={editSplitBetween.length === group.members.length}
-                              indeterminate={editSplitBetween.length > 0 && editSplitBetween.length < group.members.length}
-                              onChange={() =>
-                                setEditSplitBetween(editSplitBetween.length === group.members.length ? [] : allMemberIds)
-                              }
-                            />
-                            {group.members.map((member) => (
-                              <Checkbox
-                                key={member.id}
-                                label={member.name}
-                                checked={editSplitBetween.includes(member.id)}
-                                onChange={() => toggleEditSplitMember(member.id)}
-                                ml="md"
-                              />
-                            ))}
-                          </Stack>
-                          {editSplitBetween.length > 0 && (
-                            <>
-                              <Text size="sm" fw={500} mt="sm" mb={4}>{t('splitMethod')}</Text>
-                              <SegmentedControl
-                                fullWidth
-                                size="xs"
-                                value={editSplitType}
-                                onChange={(val) => {
-                                  const prev = editSplitType;
-                                  setEditSplitType(val);
-                                  if (val !== 'equal' && editSplitBetween.length > 0) {
-                                    const n = editSplitBetween.length;
-                                    const totalAmt = typeof editAmount === 'number' ? editAmount : parseFloat(editAmount as string) || 0;
-                                    const hasValues = prev !== 'equal' && Object.keys(editSplitShares).length > 0;
-                                    if (hasValues && totalAmt > 0) {
-                                      if (prev === 'percentage' && val === 'exact') {
-                                        setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, Math.round((editSplitShares[id] ?? 0) / 100 * totalAmt * 100) / 100])));
-                                      } else if (prev === 'exact' && val === 'percentage') {
-                                        setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, Math.round((editSplitShares[id] ?? 0) / totalAmt * 10000) / 100])));
-                                      }
-                                    } else {
-                                      const equalShare = val === 'percentage'
-                                        ? Math.round(10000 / n) / 100
-                                        : Math.round(totalAmt / n * 100) / 100;
-                                      setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, equalShare])));
-                                    }
-                                  }
-                                }}
-                                data={[
-                                  { label: t('equal'), value: 'equal' },
-                                  { label: t('percentage'), value: 'percentage' },
-                                  { label: t('exact'), value: 'exact' },
-                                ]}
-                              />
-                              {editSplitType !== 'equal' && (
-                                <Stack gap={4} mt="xs">
-                                  {editSplitBetween.map(id => (
-                                    <Stack key={id} gap={2}>
-                                      <MGroup gap="xs" align="center">
-                                        <Text size="sm" style={{ flex: 1 }}>{getMemberName(id)}</Text>
-                                        <NumberInput
-                                          size="xs"
-                                          w={100}
-                                          min={0}
-                                          step={editSplitType === 'percentage' ? 1 : 0.01}
-                                          decimalScale={2}
-                                          value={editSplitShares[id] ?? ''}
-                                          onChange={(val) => setEditSplitShares(prev => ({ ...prev, [id]: typeof val === 'string' ? parseFloat(val) || 0 : val }))}
-                                          rightSection={editSplitType === 'percentage' ? <Text size="xs">%</Text> : <Text size="xs">{cs(editExpenseCurrency)}</Text>}
-                                        />
-                                      </MGroup>
-                                      {editSplitType === 'percentage' && (() => {
-                                        const target = Math.max(0, Math.min(100, 100 - editSplitBetween.filter(o => o !== id).reduce((s, o) => s + (editSplitShares[o] ?? 0), 0)));
-                                        return <Slider
-                                          size="sm"
-                                          min={0}
-                                          max={100}
-                                          step={0.5}
-                                          value={editSplitShares[id] ?? 0}
-                                          onChange={(val) => setEditSplitShares(prev => ({ ...prev, [id]: snapToMark(val, target, 100) }))}
-                                          label={(v) => `${v}%`}
-                                          marks={[{ value: target, label: `${target.toFixed(1)}%` }]}
-                                        />;
-                                      })()}
-                                      {editSplitType === 'exact' && (() => {
-                                        const totalAmt = typeof editAmount === 'number' ? editAmount : parseFloat(editAmount as string) || 0;
-                                        const target = Math.max(0, Math.min(totalAmt, totalAmt - editSplitBetween.filter(o => o !== id).reduce((s, o) => s + (editSplitShares[o] ?? 0), 0)));
-                                        return <Slider
-                                          size="sm"
-                                          min={0}
-                                          max={totalAmt || 100}
-                                          step={0.01}
-                                          value={editSplitShares[id] ?? 0}
-                                          onChange={(val) => setEditSplitShares(prev => ({ ...prev, [id]: Math.round(snapToMark(val, target, totalAmt || 100) * 100) / 100 }))}
-                                          label={(v) => `${v.toFixed(2)}`}
-                                          marks={[{ value: target, label: target.toFixed(2) }]}
-                                        />;
-                                      })()}
-                                    </Stack>
-                                  ))}
-                                  <Text size="xs" mt="md" c={
-                                    editSplitType === 'percentage'
-                                      ? Math.abs(editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0) - 100) < 0.01 ? 'green' : 'red'
-                                      : Math.abs(editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0) - (typeof editAmount === 'number' ? editAmount : parseFloat(editAmount as string) || 0)) < 0.01 ? 'green' : 'red'
-                                  }>
-                                    Total: {editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0).toFixed(2)}
-                                    {editSplitType === 'percentage' ? '% / 100%' : ` / ${typeof editAmount === 'number' ? editAmount.toFixed(2) : parseFloat(editAmount as string)?.toFixed(2) || '0.00'} ${cs(editExpenseCurrency)}`}
-                                  </Text>
-                                </Stack>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
-                      <DatePickerInput
-                        label={t('date')}
-                        placeholder={t('pickDate')}
-                        size="xs"
-                        value={editExpenseDate}
-                        onChange={setEditExpenseDate}
-                        locale="de"
-                        valueFormat="DD.MM.YYYY"
-                        clearable
-                        maxDate={new Date()}
-                      />
-                      <MGroup gap="xs">
-                        <Button size="compact-sm" onClick={handleSaveExpense}>{t('save')}</Button>
-                        <Button size="compact-sm" variant="subtle" color="gray" onClick={handleCancelEditExpense}>{t('cancel')}</Button>
-                      </MGroup>
-                    </Stack>
-                  ) : (
-                    /* Display mode */
-                    <>
-                      <div style={{ cursor: 'pointer' }} onClick={() => toggleExpenseExpanded(expense.id)}>
-                        <MGroup justify="space-between" align="center" mb={4}>
-                          <MGroup gap="xs">
-                            {isPending(expense) && (
-                              <Badge size="sm" color="orange" variant="light">⏳ {t('pendingBadge')}</Badge>
-                            )}
-                            {expense.expense_type === 'transfer' && (
-                              <Badge size="sm" color="green" variant="light">💸 {t('transferBadge')}</Badge>
-                            )}
-                            {expense.expense_type === 'income' && (
-                              <Badge size="sm" color="yellow" variant="light">💰 {t('incomeBadge')}</Badge>
-                            )}
-                            <Text fw={600}>{expense.description}</Text>
-                          </MGroup>
-                          <MGroup gap={4} align="baseline">
-                            <Text fw={700} c="blue" size="lg">{fmtAmt(expense.amount, expense.currency)}</Text>
-                            {expense.currency !== group.currency && (
-                              <Text size="xs" c="dimmed">≈ {fmtAmt(expense.amount * expense.exchange_rate, group.currency)}</Text>
-                            )}
-                            {(() => {
-                              if (!selectedMemberId) return null;
-                              let yourShare: number | null = null;
-                              if (expense.expense_type === 'transfer') {
-                                if (expense.paid_by === selectedMemberId) yourShare = -expense.amount * expense.exchange_rate;
-                                else if (expense.transfer_to === selectedMemberId) yourShare = expense.amount * expense.exchange_rate;
-                              } else if (expense.split_between.includes(selectedMemberId)) {
-                                const splitEntry = expense.splits?.find(s => s.member_id === selectedMemberId);
-                                let share: number;
-                                if (expense.split_type === 'percentage' && splitEntry?.share != null) {
-                                  share = expense.amount * splitEntry.share / 100;
-                                } else if (expense.split_type === 'exact' && splitEntry?.share != null) {
-                                  share = splitEntry.share;
-                                } else {
-                                  share = expense.amount / expense.split_between.length;
-                                }
-                                yourShare = expense.expense_type === 'income' ? share * expense.exchange_rate : -share * expense.exchange_rate;
-                              }
-                              if (yourShare == null) return null;
-                              return (
-                                <>
-                                  <Text size="sm" c="dimmed" fw={400}>/</Text>
-                                  <Text size="sm" c={yourShare >= 0 ? 'teal' : 'red'} fw={600}>
-                                    {fmtAmt(yourShare, group.currency)}
-                                  </Text>
-                                </>
-                              );
-                            })()}
-                            {!isPending(expense) && permissions.can_edit_expenses && (
-                              <>
-                                <ActionIcon size="sm" variant="subtle" color="gray" onClick={(e) => { e.stopPropagation(); handleStartEditExpense(expense); }}>
-                                  <Text size="xs">✏️</Text>
-                                </ActionIcon>
-                                <ActionIcon size="sm" variant="subtle" color="red" onClick={(e) => { e.stopPropagation(); handleDeleteExpense(expense.id); }}>
-                                  <Text size="xs">🗑️</Text>
-                                </ActionIcon>
-                              </>
-                            )}
-                          </MGroup>
-                        </MGroup>
-                        <Text size="sm" c="dimmed">
-                          {expense.expense_type === 'transfer' ? (
-                            <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : t('unknown')}</>
-                          ) : (
-                            <>
-                              {expense.expense_type === 'income' ? t('receivedByName', { name: getMemberName(expense.paid_by) }) : t('paidBy', { name: getMemberName(expense.paid_by) })}
-                              {' · '}
-                              {t('splitLabel')} {expense.split_between.map(getMemberName).join(', ')}
-                            </>
-                          )}
-                          {' · '}
-                          <Text component="span" size="xs" c="dimmed">{formatDate(expense.expense_date)}</Text>
-                        </Text>
-                      </div>
-                      <Collapse in={expandedExpenses.has(expense.id)}>
-                        <Divider my="xs" />
-                        {expense.expense_type === 'transfer' ? (
-                          <MGroup gap="xs">
-                            <Text size="sm">{getMemberName(expense.paid_by)}</Text>
-                            <Text size="sm" c="dimmed">→</Text>
-                            <Text size="sm">{expense.transfer_to ? getMemberName(expense.transfer_to) : t('unknown')}</Text>
-                            <Text size="sm" fw={600} c="blue">{fmtAmt(expense.amount, expense.currency)}</Text>
-                          </MGroup>
-                        ) : (
-                          <Stack gap={4}>
-                            <Text size="sm" fw={500} c="dimmed">
-                              {expense.expense_type === 'income' ? t('receivedByName', { name: getMemberName(expense.paid_by) }) : t('paidBy', { name: getMemberName(expense.paid_by) })}
-                              {expense.split_type && expense.split_type !== 'equal' && (
-                                <Text component="span" size="xs" c="dimmed"> · {expense.split_type === 'percentage' ? t('percentSplit') : t('exactSplit')}</Text>
-                              )}
-                              {expense.currency !== group.currency && (
-                                <Text component="span" size="xs" c="dimmed"> · {t('rateInfo', { from: expense.currency, rate: expense.exchange_rate.toFixed(4), to: group.currency })}</Text>
-                              )}
-                            </Text>
-                            {expense.split_between.map(memberId => {
-                              const splitEntry = expense.splits?.find(s => s.member_id === memberId);
-                              let share: number;
-                              if (expense.split_type === 'percentage' && splitEntry?.share != null) {
-                                share = expense.amount * splitEntry.share / 100;
-                              } else if (expense.split_type === 'exact' && splitEntry?.share != null) {
-                                share = splitEntry.share;
-                              } else {
-                                share = expense.amount / expense.split_between.length;
-                              }
-                              const shareInGroup = share * expense.exchange_rate;
-                              return (
-                                <MGroup key={memberId} justify="space-between" px="xs">
-                                  <Text size="sm">
-                                    {getMemberName(memberId)}
-                                    {expense.split_type === 'percentage' && splitEntry?.share != null && (
-                                      <Text component="span" size="xs" c="dimmed"> ({splitEntry.share}%)</Text>
-                                    )}
-                                  </Text>
-                                  <MGroup gap={4}>
-                                    {expense.currency !== group.currency && (
-                                      <Text size="xs" c="dimmed">{fmtAmt(share, expense.currency)} ≈</Text>
-                                    )}
-                                    <Text size="sm" fw={500} c="red">
-                                      -{fmtAmt(shareInGroup, group.currency)}
-                                    </Text>
-                                  </MGroup>
-                                </MGroup>
-                              );
-                            })}
-                          </Stack>
-                        )}
-                      </Collapse>
-                    </>
-                  )}
-                </Card>
-              ))
+                    </Paper>
+                  </>
+                );
+              })()
             )}
           </Stack>
         </Tabs.Panel>

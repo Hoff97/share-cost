@@ -6,17 +6,19 @@ mod db;
 mod models;
 mod routes;
 
-use rocket::http::Method;
 use rocket::fairing::AdHoc;
 use rocket::fs::NamedFile;
 use rocket::http::ContentType;
+use rocket::http::Method;
 use rocket_cors::{AllowedHeaders, AllowedOrigins, CorsOptions};
 use std::path::{Path, PathBuf};
 
 // Serve the PWA manifest with the correct Content-Type (Rocket doesn't know .webmanifest)
 #[get("/manifest.webmanifest", rank = 5)]
 async fn manifest() -> Option<(ContentType, Vec<u8>)> {
-    let bytes = rocket::tokio::fs::read("static/manifest.webmanifest").await.ok()?;
+    let bytes = rocket::tokio::fs::read("static/manifest.webmanifest")
+        .await
+        .ok()?;
     Some((ContentType::new("application", "manifest+json"), bytes))
 }
 
@@ -39,10 +41,16 @@ fn rocket() -> _ {
     let cors = CorsOptions::default()
         .allowed_origins(AllowedOrigins::all())
         .allowed_methods(
-            vec![Method::Get, Method::Post, Method::Put, Method::Delete, Method::Options]
-                .into_iter()
-                .map(From::from)
-                .collect(),
+            vec![
+                Method::Get,
+                Method::Post,
+                Method::Put,
+                Method::Delete,
+                Method::Options,
+            ]
+            .into_iter()
+            .map(From::from)
+            .collect(),
         )
         .allowed_headers(AllowedHeaders::all())
         .to_cors()
@@ -50,18 +58,22 @@ fn rocket() -> _ {
 
     rocket::build()
         .attach(cors)
-        .attach(AdHoc::try_on_ignite("Initialize Database", |rocket| async {
-            let database_url = std::env::var("DATABASE_URL")
-                .expect("DATABASE_URL must be set");
+        .attach(AdHoc::try_on_ignite(
+            "Initialize Database",
+            |rocket| async {
+                let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
-            db::run_migrations(&database_url).await
-                .expect("Failed to run migrations");
+                db::run_migrations(&database_url)
+                    .await
+                    .expect("Failed to run migrations");
 
-            db::init_pool(&database_url).await
-                .expect("Failed to initialize database pool");
+                db::init_pool(&database_url)
+                    .await
+                    .expect("Failed to initialize database pool");
 
-            Ok(rocket)
-        }))
+                Ok(rocket)
+            },
+        ))
         .mount("/api", routes::get_routes())
         .mount("/", routes![manifest, index, spa_fallback])
         .attach(AdHoc::on_ignite("Static Files", |rocket| async {

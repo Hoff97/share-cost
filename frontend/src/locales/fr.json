@@ -70,6 +70,10 @@
   "addIncome": "Ajouter un revenu",
   "addExpense": "Ajouter une dépense",
   "noExpenses": "Pas encore de dépenses. Ajoutez-en une ci-dessus !",
+  "showMyExpensesOnly": "Mes dépenses uniquement",
+  "noMatchingExpenses": "Aucune dépense correspondante.",
+  "totalExpenses": "Total des dépenses",
+  "yourTotal": "Votre total",
 
   "pendingBadge": "En attente",
   "transferBadge": "Transfert",

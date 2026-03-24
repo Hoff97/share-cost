@@ -1,6 +1,6 @@
 use once_cell::sync::OnceCell;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 
 mod embedded {
     use refinery::embed_migrations;
@@ -14,7 +14,7 @@ pub async fn init_pool(database_url: &str) -> Result<(), sqlx::Error> {
         .max_connections(5)
         .connect(database_url)
         .await?;
-    
+
     POOL.set(pool).expect("Pool already initialized");
     Ok(())
 }
@@ -24,8 +24,9 @@ pub fn get_pool() -> &'static PgPool {
 }
 
 pub async fn run_migrations(database_url: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let (mut client, connection) = tokio_postgres::connect(database_url, tokio_postgres::NoTls).await?;
-    
+    let (mut client, connection) =
+        tokio_postgres::connect(database_url, tokio_postgres::NoTls).await?;
+
     // Spawn the connection handler
     tokio::spawn(async move {
         if let Err(e) = connection.await {
@@ -33,7 +34,9 @@ pub async fn run_migrations(database_url: &str) -> Result<(), Box<dyn std::error
         }
     });
 
-    let report = embedded::migrations::runner().run_async(&mut client).await?;
+    let report = embedded::migrations::runner()
+        .run_async(&mut client)
+        .await?;
     for migration in report.applied_migrations() {
         println!("Applied migration: {}", migration);
     }

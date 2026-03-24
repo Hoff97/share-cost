@@ -1,14 +1,14 @@
 use bigdecimal::BigDecimal;
 use bigdecimal::ToPrimitive;
-use rocket::http::Status;
-use rocket::serde::json::Json;
-use rocket::Route;
-use sqlx;
-use uuid::Uuid;
 use chrono::Utc;
 use rand::Rng;
+use rocket::Route;
+use rocket::http::Status;
+use rocket::serde::json::Json;
+use sqlx;
+use uuid::Uuid;
 
-use crate::auth::{generate_token, validate_token, GroupAuth, Permissions};
+use crate::auth::{GroupAuth, Permissions, generate_token, validate_token};
 use crate::db;
 use crate::models::*;
 
@@ -29,37 +29,33 @@ async fn create_group(
     let currency = request.currency.as_deref().unwrap_or("EUR");
 
     // Insert group
-    sqlx::query(
-        "INSERT INTO groups (id, name, currency, created_at) VALUES ($1, $2, $3, $4)"
-    )
-    .bind(group_id)
-    .bind(&request.name)
-    .bind(currency)
-    .bind(created_at)
-    .execute(pool)
-    .await
-    .map_err(|e| {
-        eprintln!("Failed to create group: {}", e);
-        Status::InternalServerError
-    })?;
+    sqlx::query("INSERT INTO groups (id, name, currency, created_at) VALUES ($1, $2, $3, $4)")
+        .bind(group_id)
+        .bind(&request.name)
+        .bind(currency)
+        .bind(created_at)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to create group: {}", e);
+            Status::InternalServerError
+        })?;
 
     // Insert members
     let mut members = Vec::new();
     for name in &request.member_names {
         let member_id = Uuid::new_v4();
-        sqlx::query(
-            "INSERT INTO members (id, group_id, name, created_at) VALUES ($1, $2, $3, $4)"
-        )
-        .bind(member_id)
-        .bind(group_id)
-        .bind(name)
-        .bind(created_at)
-        .execute(pool)
-        .await
-        .map_err(|e| {
-            eprintln!("Failed to create member: {}", e);
-            Status::InternalServerError
-        })?;
+        sqlx::query("INSERT INTO members (id, group_id, name, created_at) VALUES ($1, $2, $3, $4)")
+            .bind(member_id)
+            .bind(group_id)
+            .bind(name)
+            .bind(created_at)
+            .execute(pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to create member: {}", e);
+                Status::InternalServerError
+            })?;
 
         members.push(Member {
             id: member_id,
@@ -86,23 +82,20 @@ async fn create_group(
 
 // Get group - requires valid JWT
 #[get("/groups/current")]
-async fn get_current_group(
-    auth: GroupAuth,
-) -> Result<Json<Group>, Status> {
+async fn get_current_group(auth: GroupAuth) -> Result<Json<Group>, Status> {
     let pool = db::get_pool();
-    
+
     // Get group
-    let group_row: GroupRow = sqlx::query_as(
-        "SELECT id, name, currency, created_at FROM groups WHERE id = $1"
-    )
-    .bind(auth.group_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| {
-        eprintln!("Failed to fetch group: {}", e);
-        Status::InternalServerError
-    })?
-    .ok_or(Status::NotFound)?;
+    let group_row: GroupRow =
+        sqlx::query_as("SELECT id, name, currency, created_at FROM groups WHERE id = $1")
+            .bind(auth.group_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to fetch group: {}", e);
+                Status::InternalServerError
+            })?
+            .ok_or(Status::NotFound)?;
 
     // Get members
     let member_rows: Vec<MemberRow> = sqlx::query_as(
@@ -120,12 +113,15 @@ async fn get_current_group(
         id: group_row.id,
         name: group_row.name,
         currency: group_row.currency.clone(),
-        members: member_rows.into_iter().map(|r| Member {
-            id: r.id,
-            name: r.name,
-            paypal_email: r.paypal_email,
-            iban: r.iban,
-        }).collect(),
+        members: member_rows
+            .into_iter()
+            .map(|r| Member {
+                id: r.id,
+                name: r.name,
+                paypal_email: r.paypal_email,
+                iban: r.iban,
+            })
+            .collect(),
         created_at: group_row.created_at,
     };
 
@@ -142,35 +138,32 @@ async fn add_member(
         return Err(Status::Forbidden);
     }
     let pool = db::get_pool();
-    
+
     // Check group exists
-    let group_row: GroupRow = sqlx::query_as(
-        "SELECT id, name, currency, created_at FROM groups WHERE id = $1"
-    )
-    .bind(auth.group_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| {
-        eprintln!("Failed to fetch group: {}", e);
-        Status::InternalServerError
-    })?
-    .ok_or(Status::NotFound)?;
+    let group_row: GroupRow =
+        sqlx::query_as("SELECT id, name, currency, created_at FROM groups WHERE id = $1")
+            .bind(auth.group_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to fetch group: {}", e);
+                Status::InternalServerError
+            })?
+            .ok_or(Status::NotFound)?;
 
     // Insert new member
     let member_id = Uuid::new_v4();
-    sqlx::query(
-        "INSERT INTO members (id, group_id, name, created_at) VALUES ($1, $2, $3, $4)"
-    )
-    .bind(member_id)
-    .bind(auth.group_id)
-    .bind(&request.name)
-    .bind(Utc::now())
-    .execute(pool)
-    .await
-    .map_err(|e| {
-        eprintln!("Failed to create member: {}", e);
-        Status::InternalServerError
-    })?;
+    sqlx::query("INSERT INTO members (id, group_id, name, created_at) VALUES ($1, $2, $3, $4)")
+        .bind(member_id)
+        .bind(auth.group_id)
+        .bind(&request.name)
+        .bind(Utc::now())
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to create member: {}", e);
+            Status::InternalServerError
+        })?;
 
     // Get all members
     let member_rows: Vec<MemberRow> = sqlx::query_as(
@@ -188,12 +181,15 @@ async fn add_member(
         id: group_row.id,
         name: group_row.name,
         currency: group_row.currency.clone(),
-        members: member_rows.into_iter().map(|r| Member {
-            id: r.id,
-            name: r.name,
-            paypal_email: r.paypal_email,
-            iban: r.iban,
-        }).collect(),
+        members: member_rows
+            .into_iter()
+            .map(|r| Member {
+                id: r.id,
+                name: r.name,
+                paypal_email: r.paypal_email,
+                iban: r.iban,
+            })
+            .collect(),
         created_at: group_row.created_at,
     };
 
@@ -228,18 +224,16 @@ async fn update_member_payment(
     .ok_or(Status::NotFound)?;
 
     // Update payment info
-    sqlx::query(
-        "UPDATE members SET paypal_email = $1, iban = $2 WHERE id = $3"
-    )
-    .bind(&request.paypal_email)
-    .bind(&request.iban)
-    .bind(member_uuid)
-    .execute(pool)
-    .await
-    .map_err(|e| {
-        eprintln!("Failed to update member payment info: {}", e);
-        Status::InternalServerError
-    })?;
+    sqlx::query("UPDATE members SET paypal_email = $1, iban = $2 WHERE id = $3")
+        .bind(&request.paypal_email)
+        .bind(&request.iban)
+        .bind(member_uuid)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to update member payment info: {}", e);
+            Status::InternalServerError
+        })?;
 
     Ok(Json(Member {
         id: member_row.id,
@@ -251,11 +245,9 @@ async fn update_member_payment(
 
 // Get expenses - requires valid JWT
 #[get("/groups/current/expenses")]
-async fn get_expenses(
-    auth: GroupAuth,
-) -> Result<Json<Vec<Expense>>, Status> {
+async fn get_expenses(auth: GroupAuth) -> Result<Json<Vec<Expense>>, Status> {
     let pool = db::get_pool();
-    
+
     // Get all expenses for this group
     let expense_rows: Vec<ExpenseRow> = sqlx::query_as(
         "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at, split_type 
@@ -272,23 +264,27 @@ async fn get_expenses(
     let mut expenses = Vec::new();
     for row in expense_rows {
         // Get split members for each expense
-        let splits: Vec<ExpenseSplitMemberRow> = sqlx::query_as(
-            "SELECT member_id, share FROM expense_splits WHERE expense_id = $1"
-        )
-        .bind(row.id)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| {
-            eprintln!("Failed to fetch expense splits: {}", e);
-            Status::InternalServerError
-        })?;
+        let splits: Vec<ExpenseSplitMemberRow> =
+            sqlx::query_as("SELECT member_id, share FROM expense_splits WHERE expense_id = $1")
+                .bind(row.id)
+                .fetch_all(pool)
+                .await
+                .map_err(|e| {
+                    eprintln!("Failed to fetch expense splits: {}", e);
+                    Status::InternalServerError
+                })?;
 
         let split_type = row.split_type.clone();
         let split_entries: Option<Vec<SplitEntry>> = if split_type != "equal" {
-            Some(splits.iter().map(|s| SplitEntry {
-                member_id: s.member_id,
-                share: s.share.as_ref().and_then(|v| v.to_f64()),
-            }).collect())
+            Some(
+                splits
+                    .iter()
+                    .map(|s| SplitEntry {
+                        member_id: s.member_id,
+                        share: s.share.as_ref().and_then(|v| v.to_f64()),
+                    })
+                    .collect(),
+            )
         } else {
             None
         };
@@ -326,21 +322,23 @@ async fn create_expense(
     let pool = db::get_pool();
     let expense_id = Uuid::new_v4();
     let created_at = Utc::now();
-    let expense_date = request.expense_date.unwrap_or_else(|| Utc::now().date_naive());
+    let expense_date = request
+        .expense_date
+        .unwrap_or_else(|| Utc::now().date_naive());
 
     // Get group for default currency
-    let group_row: GroupRow = sqlx::query_as(
-        "SELECT id, name, currency, created_at FROM groups WHERE id = $1"
-    )
-    .bind(auth.group_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| {
-        eprintln!("Failed to fetch group: {}", e);
-        Status::InternalServerError
-    })?;
+    let group_row: GroupRow =
+        sqlx::query_as("SELECT id, name, currency, created_at FROM groups WHERE id = $1")
+            .bind(auth.group_id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to fetch group: {}", e);
+                Status::InternalServerError
+            })?;
     let currency = request.currency.clone().unwrap_or(group_row.currency);
-    let exchange_rate_val = BigDecimal::try_from(request.exchange_rate.unwrap_or(1.0)).map_err(|_| Status::BadRequest)?;
+    let exchange_rate_val = BigDecimal::try_from(request.exchange_rate.unwrap_or(1.0))
+        .map_err(|_| Status::BadRequest)?;
 
     // Convert f64 to BigDecimal
     let amount = BigDecimal::try_from(request.amount).map_err(|_| Status::BadRequest)?;
@@ -373,12 +371,13 @@ async fn create_expense(
     if request.expense_type != "transfer" {
         for member_id in &request.split_between {
             let share_val: Option<BigDecimal> = request.splits.as_ref().and_then(|splits| {
-                splits.iter().find(|s| &s.member_id == member_id).and_then(|s| {
-                    s.share.and_then(|v| BigDecimal::try_from(v).ok())
-                })
+                splits
+                    .iter()
+                    .find(|s| &s.member_id == member_id)
+                    .and_then(|s| s.share.and_then(|v| BigDecimal::try_from(v).ok()))
             });
             sqlx::query(
-                "INSERT INTO expense_splits (expense_id, member_id, share) VALUES ($1, $2, $3)"
+                "INSERT INTO expense_splits (expense_id, member_id, share) VALUES ($1, $2, $3)",
             )
             .bind(expense_id)
             .bind(member_id)
@@ -449,7 +448,12 @@ async fn update_expense(
     let amount = BigDecimal::try_from(request.amount).map_err(|_| Status::BadRequest)?;
     let expense_date = request.expense_date.unwrap_or(_existing.expense_date);
     let currency = request.currency.clone().unwrap_or(_existing.currency);
-    let exchange_rate_val = BigDecimal::try_from(request.exchange_rate.unwrap_or(_existing.exchange_rate.to_f64().unwrap_or(1.0))).map_err(|_| Status::BadRequest)?;
+    let exchange_rate_val = BigDecimal::try_from(
+        request
+            .exchange_rate
+            .unwrap_or(_existing.exchange_rate.to_f64().unwrap_or(1.0)),
+    )
+    .map_err(|_| Status::BadRequest)?;
 
     // Update expense
     sqlx::query(
@@ -486,12 +490,13 @@ async fn update_expense(
     if request.expense_type != "transfer" {
         for member_id in &request.split_between {
             let share_val: Option<BigDecimal> = request.splits.as_ref().and_then(|splits| {
-                splits.iter().find(|s| &s.member_id == member_id).and_then(|s| {
-                    s.share.and_then(|v| BigDecimal::try_from(v).ok())
-                })
+                splits
+                    .iter()
+                    .find(|s| &s.member_id == member_id)
+                    .and_then(|s| s.share.and_then(|v| BigDecimal::try_from(v).ok()))
             });
             sqlx::query(
-                "INSERT INTO expense_splits (expense_id, member_id, share) VALUES ($1, $2, $3)"
+                "INSERT INTO expense_splits (expense_id, member_id, share) VALUES ($1, $2, $3)",
             )
             .bind(expense_uuid)
             .bind(member_id)
@@ -533,10 +538,7 @@ async fn update_expense(
 
 // Delete expense - requires valid JWT + edit_expenses permission
 #[delete("/groups/current/expenses/<expense_id>")]
-async fn delete_expense(
-    auth: GroupAuth,
-    expense_id: &str,
-) -> Result<Status, Status> {
+async fn delete_expense(auth: GroupAuth, expense_id: &str) -> Result<Status, Status> {
     if !auth.permissions.has_edit_expenses() {
         return Err(Status::Forbidden);
     }
@@ -583,11 +585,9 @@ async fn delete_expense(
 
 // Get balances - requires valid JWT
 #[get("/groups/current/balances")]
-async fn get_balances(
-    auth: GroupAuth,
-) -> Result<Json<Vec<Balance>>, Status> {
+async fn get_balances(auth: GroupAuth) -> Result<Json<Vec<Balance>>, Status> {
     let pool = db::get_pool();
-    
+
     // Get all members
     let member_rows: Vec<MemberRow> = sqlx::query_as(
         "SELECT id, group_id, name, paypal_email, iban, created_at FROM members WHERE group_id = $1"
@@ -645,7 +645,7 @@ async fn get_balances(
             "income" => {
                 // External income: receiver holds money, split members are owed their share
                 let splits: Vec<ExpenseSplitMemberRow> = sqlx::query_as(
-                    "SELECT member_id, share FROM expense_splits WHERE expense_id = $1"
+                    "SELECT member_id, share FROM expense_splits WHERE expense_id = $1",
                 )
                 .bind(expense_row.id)
                 .fetch_all(pool)
@@ -669,16 +669,25 @@ async fn get_balances(
                 for split in &splits {
                     let member_amount = match expense_row.split_type.as_str() {
                         "percentage" => {
-                            let pct = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(100.0 / split_count);
+                            let pct = split
+                                .share
+                                .as_ref()
+                                .and_then(|v| v.to_f64())
+                                .unwrap_or(100.0 / split_count);
                             amount * pct / 100.0
                         }
                         "exact" => {
-                            let exact = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(raw_amount / split_count);
+                            let exact = split
+                                .share
+                                .as_ref()
+                                .and_then(|v| v.to_f64())
+                                .unwrap_or(raw_amount / split_count);
                             exact * exchange_rate
                         }
                         _ => amount / split_count, // equal
                     };
-                    if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id) {
+                    if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id)
+                    {
                         member.balance += member_amount;
                     }
                 }
@@ -686,7 +695,7 @@ async fn get_balances(
             _ => {
                 // Regular expense: payer gets credit, split members owe
                 let splits: Vec<ExpenseSplitMemberRow> = sqlx::query_as(
-                    "SELECT member_id, share FROM expense_splits WHERE expense_id = $1"
+                    "SELECT member_id, share FROM expense_splits WHERE expense_id = $1",
                 )
                 .bind(expense_row.id)
                 .fetch_all(pool)
@@ -710,16 +719,25 @@ async fn get_balances(
                 for split in &splits {
                     let member_amount = match expense_row.split_type.as_str() {
                         "percentage" => {
-                            let pct = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(100.0 / split_count);
+                            let pct = split
+                                .share
+                                .as_ref()
+                                .and_then(|v| v.to_f64())
+                                .unwrap_or(100.0 / split_count);
                             amount * pct / 100.0
                         }
                         "exact" => {
-                            let exact = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(raw_amount / split_count);
+                            let exact = split
+                                .share
+                                .as_ref()
+                                .and_then(|v| v.to_f64())
+                                .unwrap_or(raw_amount / split_count);
                             exact * exchange_rate
                         }
                         _ => amount / split_count, // equal
                     };
-                    if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id) {
+                    if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id)
+                    {
                         member.balance -= member_amount;
                     }
                 }
@@ -732,9 +750,7 @@ async fn get_balances(
 
 // Get current token's permissions
 #[get("/groups/current/permissions")]
-fn get_permissions(
-    auth: GroupAuth,
-) -> Json<PermissionsResponse> {
+fn get_permissions(auth: GroupAuth) -> Json<PermissionsResponse> {
     let p = &auth.permissions;
     Json(PermissionsResponse {
         can_delete_group: p.has_delete_group(),
@@ -767,11 +783,11 @@ async fn generate_share_link(
     request: Json<GenerateShareLinkRequest>,
 ) -> Result<Json<ShareCodeResponse>, Status> {
     let requested = Permissions {
-        can_delete_group:   request.can_delete_group,
+        can_delete_group: request.can_delete_group,
         can_manage_members: request.can_manage_members,
         can_update_payment: request.can_update_payment,
-        can_add_expenses:   request.can_add_expenses,
-        can_edit_expenses:  request.can_edit_expenses,
+        can_add_expenses: request.can_add_expenses,
+        can_edit_expenses: request.can_edit_expenses,
     };
     let effective = requested.cap_by(&auth.permissions);
     let pool = db::get_pool();
@@ -812,13 +828,15 @@ async fn generate_share_link(
     // Generate a unique 16-char code (retry on collision)
     let code = loop {
         let candidate = random_code(16);
-        let exists: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM share_links WHERE code = $1)"
-        )
-        .bind(&candidate)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| { eprintln!("DB error checking share code: {}", e); Status::InternalServerError })?;
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM share_links WHERE code = $1)")
+                .bind(&candidate)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| {
+                    eprintln!("DB error checking share code: {}", e);
+                    Status::InternalServerError
+                })?;
         if !exists {
             break candidate;
         }
@@ -868,11 +886,11 @@ async fn redeem_share_code(
     let (group_id, dg, mm, up, ae, ee) = row.ok_or(Status::NotFound)?;
 
     let link_perms = Permissions {
-        can_delete_group:   Some(dg),
+        can_delete_group: Some(dg),
         can_manage_members: Some(mm),
         can_update_payment: Some(up),
-        can_add_expenses:   Some(ae),
-        can_edit_expenses:  Some(ee),
+        can_add_expenses: Some(ae),
+        can_edit_expenses: Some(ee),
     };
 
     // If user sent an existing token for the same group, merge permissions
@@ -896,11 +914,11 @@ async fn redeem_share_code(
     Ok(Json(ShareLinkResponse {
         token,
         permissions: PermissionsResponse {
-            can_delete_group:   final_perms.has_delete_group(),
+            can_delete_group: final_perms.has_delete_group(),
             can_manage_members: final_perms.has_manage_members(),
             can_update_payment: final_perms.has_update_payment(),
-            can_add_expenses:   final_perms.has_add_expenses(),
-            can_edit_expenses:  final_perms.has_edit_expenses(),
+            can_add_expenses: final_perms.has_add_expenses(),
+            can_edit_expenses: final_perms.has_edit_expenses(),
         },
     }))
 }
@@ -911,35 +929,34 @@ fn merge_token(
     auth: GroupAuth,
     request: Json<MergeTokenRequest>,
 ) -> Result<Json<ShareLinkResponse>, Status> {
-    let other_claims = validate_token(&request.other_token)
-        .map_err(|_| Status::BadRequest)?;
+    let other_claims = validate_token(&request.other_token).map_err(|_| Status::BadRequest)?;
 
     // Both tokens must be for the same group
     if other_claims.group_id != auth.group_id {
         return Err(Status::BadRequest);
     }
 
-    let merged = auth.permissions.union_with(&other_claims.effective_permissions());
+    let merged = auth
+        .permissions
+        .union_with(&other_claims.effective_permissions());
     let token = generate_token(auth.group_id, Some(merged.clone()))
         .map_err(|_| Status::InternalServerError)?;
 
     Ok(Json(ShareLinkResponse {
         token,
         permissions: PermissionsResponse {
-            can_delete_group:   merged.has_delete_group(),
+            can_delete_group: merged.has_delete_group(),
             can_manage_members: merged.has_manage_members(),
             can_update_payment: merged.has_update_payment(),
-            can_add_expenses:   merged.has_add_expenses(),
-            can_edit_expenses:  merged.has_edit_expenses(),
+            can_add_expenses: merged.has_add_expenses(),
+            can_edit_expenses: merged.has_edit_expenses(),
         },
     }))
 }
 
 // List all share links for the current group (requires all permissions)
 #[get("/groups/current/share-links")]
-async fn list_share_links(
-    auth: GroupAuth,
-) -> Result<Json<Vec<ShareLinkItem>>, Status> {
+async fn list_share_links(auth: GroupAuth) -> Result<Json<Vec<ShareLinkItem>>, Status> {
     if !auth.permissions.has_all() {
         return Err(Status::Forbidden);
     }
@@ -952,31 +969,38 @@ async fn list_share_links(
     .await
     .map_err(|e| { eprintln!("DB error listing share links: {}", e); Status::InternalServerError })?;
 
-    let items: Vec<ShareLinkItem> = rows.into_iter().map(|(code, dg, mm, up, ae, ee, created_at)| {
-        ShareLinkItem { code, can_delete_group: dg, can_manage_members: mm, can_update_payment: up, can_add_expenses: ae, can_edit_expenses: ee, created_at: created_at.to_rfc3339() }
-    }).collect();
+    let items: Vec<ShareLinkItem> = rows
+        .into_iter()
+        .map(|(code, dg, mm, up, ae, ee, created_at)| ShareLinkItem {
+            code,
+            can_delete_group: dg,
+            can_manage_members: mm,
+            can_update_payment: up,
+            can_add_expenses: ae,
+            can_edit_expenses: ee,
+            created_at: created_at.to_rfc3339(),
+        })
+        .collect();
 
     Ok(Json(items))
 }
 
 // Delete a share link by code (requires all permissions)
 #[delete("/groups/current/share-links/<code>")]
-async fn delete_share_link(
-    auth: GroupAuth,
-    code: &str,
-) -> Result<Status, Status> {
+async fn delete_share_link(auth: GroupAuth, code: &str) -> Result<Status, Status> {
     if !auth.permissions.has_all() {
         return Err(Status::Forbidden);
     }
     let pool = db::get_pool();
-    let result = sqlx::query(
-        "DELETE FROM share_links WHERE code = $1 AND group_id = $2"
-    )
-    .bind(code)
-    .bind(auth.group_id)
-    .execute(pool)
-    .await
-    .map_err(|e| { eprintln!("DB error deleting share link: {}", e); Status::InternalServerError })?;
+    let result = sqlx::query("DELETE FROM share_links WHERE code = $1 AND group_id = $2")
+        .bind(code)
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("DB error deleting share link: {}", e);
+            Status::InternalServerError
+        })?;
 
     if result.rows_affected() == 0 {
         return Err(Status::NotFound);
@@ -1000,16 +1024,21 @@ async fn rename_group(
         .bind(auth.group_id)
         .execute(pool)
         .await
-        .map_err(|e| { eprintln!("Failed to rename group: {}", e); Status::InternalServerError })?;
+        .map_err(|e| {
+            eprintln!("Failed to rename group: {}", e);
+            Status::InternalServerError
+        })?;
 
     // Return updated group
-    let group_row: GroupRow = sqlx::query_as(
-        "SELECT id, name, currency, created_at FROM groups WHERE id = $1"
-    )
-    .bind(auth.group_id)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| { eprintln!("DB error: {}", e); Status::InternalServerError })?;
+    let group_row: GroupRow =
+        sqlx::query_as("SELECT id, name, currency, created_at FROM groups WHERE id = $1")
+            .bind(auth.group_id)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| {
+                eprintln!("DB error: {}", e);
+                Status::InternalServerError
+            })?;
 
     let member_rows: Vec<MemberRow> = sqlx::query_as(
         "SELECT id, group_id, name, paypal_email, iban, created_at FROM members WHERE group_id = $1 ORDER BY created_at"
@@ -1032,9 +1061,7 @@ async fn rename_group(
 
 // Delete group - requires valid JWT + delete_group permission
 #[delete("/groups/current")]
-async fn delete_group(
-    auth: GroupAuth,
-) -> Result<Status, Status> {
+async fn delete_group(auth: GroupAuth) -> Result<Status, Status> {
     if !auth.permissions.has_delete_group() {
         return Err(Status::Forbidden);
     }
@@ -1053,19 +1080,28 @@ async fn delete_group(
         .bind(auth.group_id)
         .execute(pool)
         .await
-        .map_err(|e| { eprintln!("Failed to delete expenses: {}", e); Status::InternalServerError })?;
+        .map_err(|e| {
+            eprintln!("Failed to delete expenses: {}", e);
+            Status::InternalServerError
+        })?;
 
     sqlx::query("DELETE FROM members WHERE group_id = $1")
         .bind(auth.group_id)
         .execute(pool)
         .await
-        .map_err(|e| { eprintln!("Failed to delete members: {}", e); Status::InternalServerError })?;
+        .map_err(|e| {
+            eprintln!("Failed to delete members: {}", e);
+            Status::InternalServerError
+        })?;
 
     sqlx::query("DELETE FROM groups WHERE id = $1")
         .bind(auth.group_id)
         .execute(pool)
         .await
-        .map_err(|e| { eprintln!("Failed to delete group: {}", e); Status::InternalServerError })?;
+        .map_err(|e| {
+            eprintln!("Failed to delete group: {}", e);
+            Status::InternalServerError
+        })?;
 
     Ok(Status::NoContent)
 }

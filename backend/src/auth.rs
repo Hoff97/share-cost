@@ -1,4 +1,4 @@
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use once_cell::sync::Lazy;
 use rocket::http::Status;
 use rocket::request::{FromRequest, Outcome, Request};
@@ -20,15 +20,40 @@ fn default_true() -> Option<bool> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Permissions {
-    #[serde(default = "default_true", rename = "dg", alias = "can_delete_group", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default = "default_true",
+        rename = "dg",
+        alias = "can_delete_group",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub can_delete_group: Option<bool>,
-    #[serde(default = "default_true", rename = "mm", alias = "can_manage_members", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default = "default_true",
+        rename = "mm",
+        alias = "can_manage_members",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub can_manage_members: Option<bool>,
-    #[serde(default = "default_true", rename = "up", alias = "can_update_payment", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default = "default_true",
+        rename = "up",
+        alias = "can_update_payment",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub can_update_payment: Option<bool>,
-    #[serde(default = "default_true", rename = "ae", alias = "can_add_expenses", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default = "default_true",
+        rename = "ae",
+        alias = "can_add_expenses",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub can_add_expenses: Option<bool>,
-    #[serde(default = "default_true", rename = "ee", alias = "can_edit_expenses", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default = "default_true",
+        rename = "ee",
+        alias = "can_edit_expenses",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub can_edit_expenses: Option<bool>,
 }
 
@@ -49,26 +74,39 @@ impl Permissions {
         opt.unwrap_or(true)
     }
 
-    pub fn has_delete_group(&self) -> bool { Self::resolve(self.can_delete_group) }
-    pub fn has_manage_members(&self) -> bool { Self::resolve(self.can_manage_members) }
-    pub fn has_update_payment(&self) -> bool { Self::resolve(self.can_update_payment) }
-    pub fn has_add_expenses(&self) -> bool { Self::resolve(self.can_add_expenses) }
-    pub fn has_edit_expenses(&self) -> bool { Self::resolve(self.can_edit_expenses) }
+    pub fn has_delete_group(&self) -> bool {
+        Self::resolve(self.can_delete_group)
+    }
+    pub fn has_manage_members(&self) -> bool {
+        Self::resolve(self.can_manage_members)
+    }
+    pub fn has_update_payment(&self) -> bool {
+        Self::resolve(self.can_update_payment)
+    }
+    pub fn has_add_expenses(&self) -> bool {
+        Self::resolve(self.can_add_expenses)
+    }
+    pub fn has_edit_expenses(&self) -> bool {
+        Self::resolve(self.can_edit_expenses)
+    }
 
     /// Returns true if every permission is granted.
     pub fn has_all(&self) -> bool {
-        self.has_delete_group() && self.has_manage_members() && self.has_update_payment()
-            && self.has_add_expenses() && self.has_edit_expenses()
+        self.has_delete_group()
+            && self.has_manage_members()
+            && self.has_update_payment()
+            && self.has_add_expenses()
+            && self.has_edit_expenses()
     }
 
     /// Cap each permission by the caller's own permissions (share link can't escalate).
     pub fn cap_by(&self, caller: &Permissions) -> Permissions {
         Permissions {
-            can_delete_group:   Some(self.has_delete_group()   && caller.has_delete_group()),
+            can_delete_group: Some(self.has_delete_group() && caller.has_delete_group()),
             can_manage_members: Some(self.has_manage_members() && caller.has_manage_members()),
             can_update_payment: Some(self.has_update_payment() && caller.has_update_payment()),
-            can_add_expenses:   Some(self.has_add_expenses()   && caller.has_add_expenses()),
-            can_edit_expenses:  Some(self.has_edit_expenses()  && caller.has_edit_expenses()),
+            can_add_expenses: Some(self.has_add_expenses() && caller.has_add_expenses()),
+            can_edit_expenses: Some(self.has_edit_expenses() && caller.has_edit_expenses()),
         }
     }
 
@@ -76,11 +114,11 @@ impl Permissions {
     /// token with a newly received share link so the user keeps the best of both.
     pub fn union_with(&self, other: &Permissions) -> Permissions {
         Permissions {
-            can_delete_group:   Some(self.has_delete_group()   || other.has_delete_group()),
+            can_delete_group: Some(self.has_delete_group() || other.has_delete_group()),
             can_manage_members: Some(self.has_manage_members() || other.has_manage_members()),
             can_update_payment: Some(self.has_update_payment() || other.has_update_payment()),
-            can_add_expenses:   Some(self.has_add_expenses()   || other.has_add_expenses()),
-            can_edit_expenses:  Some(self.has_edit_expenses()  || other.has_edit_expenses()),
+            can_add_expenses: Some(self.has_add_expenses() || other.has_add_expenses()),
+            can_edit_expenses: Some(self.has_edit_expenses() || other.has_edit_expenses()),
         }
     }
 }
@@ -120,7 +158,7 @@ impl<'r> FromRequest<'r> for GroupAuth {
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         // Check Authorization header: Bearer <token>
         let auth_header = request.headers().get_one("Authorization");
-        
+
         match auth_header {
             Some(header) => {
                 if let Some(token) = header.strip_prefix("Bearer ") {
@@ -140,7 +178,10 @@ impl<'r> FromRequest<'r> for GroupAuth {
     }
 }
 
-pub fn generate_token(group_id: Uuid, permissions: Option<Permissions>) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn generate_token(
+    group_id: Uuid,
+    permissions: Option<Permissions>,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let claims = Claims {
         group_id,
         // Token expires in 10 years (essentially permanent for share links)

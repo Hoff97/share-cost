@@ -70,6 +70,10 @@
   "addIncome": "Dodaj przychód",
   "addExpense": "Dodaj wydatek",
   "noExpenses": "Brak wydatków. Dodaj jeden powyżej!",
+  "showMyExpensesOnly": "Tylko moje wydatki",
+  "noMatchingExpenses": "Brak pasujących wydatków.",
+  "totalExpenses": "Suma wydatków",
+  "yourTotal": "Twój udział",
 
   "pendingBadge": "Oczekujący",
   "transferBadge": "Przelew",
