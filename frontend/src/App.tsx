@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge, CloseButton, ActionIcon, useMantineColorScheme, useComputedColorScheme, Select } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
+import { useQueryState, parseAsString } from 'nuqs';
 import { LANGUAGES } from './i18n';
 import * as api from './offlineApi';
 import type { Group } from './offlineApi';
@@ -179,6 +180,7 @@ function AppContent() {
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [storedGroups, setStoredGroups] = useState<StoredGroup[]>([]);
+  const [urlGroupId, setUrlGroupId] = useQueryState('group', parseAsString);
 
   useEffect(() => {
     setStoredGroups(getStoredGroups());
@@ -190,6 +192,15 @@ function AppContent() {
     } else if (urlToken) {
       clearHashFromUrl();
       loadGroup(urlToken);
+    } else if (urlGroupId) {
+      // Restore group from URL state
+      const stored = getStoredGroups().find(g => g.id === urlGroupId);
+      if (stored) {
+        loadGroup(stored.token);
+      } else {
+        setUrlGroupId(null);
+        setLoading(false);
+      }
     } else {
       setLoading(false);
     }
@@ -244,6 +255,7 @@ function AppContent() {
         setToken(finalToken);
         saveGroup(groupData.id, groupData.name, finalToken);
         autoMatchMember(groupData, groupData.id);
+        setUrlGroupId(groupData.id);
         setStoredGroups(getStoredGroups());
       } else {
         setError(t('invalidShareLink'));
@@ -274,6 +286,7 @@ function AppContent() {
         setGroup(groupData);
         setToken(finalToken);
         saveGroup(groupData.id, groupData.name, finalToken);
+        setUrlGroupId(groupData.id);
         setStoredGroups(getStoredGroups());
       } else {
         setError(t('invalidLink'));
@@ -289,6 +302,7 @@ function AppContent() {
     setToken(newToken);
     setShowCreate(false);
     saveGroup(newGroup.id, newGroup.name, newToken);
+    setUrlGroupId(newGroup.id);
     setStoredGroups(getStoredGroups());
   };
 
@@ -303,6 +317,7 @@ function AppContent() {
   const handleBackToList = () => {
     setGroup(null);
     setToken(null);
+    setUrlGroupId(null);
     setStoredGroups(getStoredGroups());
   };
 
@@ -317,6 +332,7 @@ function AppContent() {
     if (group) removeGroup(group.id);
     setGroup(null);
     setToken(null);
+    setUrlGroupId(null);
     setStoredGroups(getStoredGroups());
   };
 

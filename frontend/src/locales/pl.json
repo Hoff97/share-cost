@@ -138,5 +138,6 @@
   "balanceTransferredTo": "Saldo przeniesione do {{group}}",
   "balanceTransferredFrom": "Saldo przeniesione z {{group}}",
 
-  "language": "Język"
+  "language": "Język",
+  "newBadge": "Nowy"
 }

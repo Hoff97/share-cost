@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Text, Card, Badge, ActionIcon, Collapse, Divider, Stack,
+  Text, Card, Badge, Collapse, Divider, Stack,
   Group as MGroup, SegmentedControl, TextInput, NumberInput, Select,
   Checkbox, Slider,
   Button,
@@ -49,6 +49,7 @@ export interface ExpenseCardProps {
   canEdit: boolean;
   isEditing: boolean;
   isExpanded: boolean;
+  isNew?: boolean;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: (data: {
@@ -76,6 +77,7 @@ export function ExpenseCard({
   canEdit,
   isEditing,
   isExpanded,
+  isNew,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
@@ -116,15 +118,30 @@ export function ExpenseCard({
     );
   };
 
+  // Validation: check all fields are filled, and splits sum correctly
+  const editAmountNum = typeof editAmount === 'number' ? editAmount : parseFloat(editAmount as string) || 0;
+  const isEditFormValid = (() => {
+    if (!editDescription.trim() || editAmountNum <= 0 || !editPaidBy) return false;
+    if (editExpenseType === 'transfer') return !!editTransferTo;
+    if (editSplitBetween.length === 0) return false;
+    if (editSplitType === 'percentage') {
+      const total = editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0);
+      return Math.abs(total - 100) < 0.01;
+    }
+    if (editSplitType === 'exact') {
+      const total = editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0);
+      return Math.abs(total - editAmountNum) < 0.01;
+    }
+    return true;
+  })();
+
   const handleSave = () => {
-    if (!editDescription || !editAmount || !editPaidBy) return;
-    if (editExpenseType === 'transfer' && !editTransferTo) return;
-    if (editExpenseType !== 'transfer' && editSplitBetween.length === 0) return;
+    if (!isEditFormValid) return;
 
     onSaveEdit({
       description: editDescription,
       amount: typeof editAmount === 'string' ? parseFloat(editAmount) : editAmount,
-      paidBy: editPaidBy,
+      paidBy: editPaidBy!,
       splitBetween: editSplitBetween,
       expenseType: editExpenseType,
       transferTo: editExpenseType === 'transfer' ? (editTransferTo ?? undefined) : undefined,
@@ -173,6 +190,9 @@ export function ExpenseCard({
           : expense.expense_type === 'income'
           ? 'var(--mantine-color-yellow-6)'
           : 'var(--mantine-color-blue-6)',
+        ...(isNew ? {
+          background: 'light-dark(var(--mantine-color-blue-0), var(--mantine-color-blue-9))',
+        } : {}),
       }}
     >
       {isEditing ? (
@@ -378,7 +398,7 @@ export function ExpenseCard({
             maxDate={new Date()}
           />
           <MGroup gap="xs">
-            <Button size="compact-sm" onClick={handleSave}>{t('save')}</Button>
+            <Button size="compact-sm" onClick={handleSave} disabled={!isEditFormValid}>{t('save')}</Button>
             <Button size="compact-sm" variant="subtle" color="gray" onClick={onCancelEdit}>{t('cancel')}</Button>
           </MGroup>
         </Stack>
@@ -411,16 +431,6 @@ export function ExpenseCard({
                     </Text>
                   </>
                 )}
-                {!isPending(expense) && canEdit && (
-                  <>
-                    <ActionIcon size="sm" variant="subtle" color="gray" onClick={(e) => { e.stopPropagation(); onStartEdit(); }}>
-                      <Text size="xs">✏️</Text>
-                    </ActionIcon>
-                    <ActionIcon size="sm" variant="subtle" color="red" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
-                      <Text size="xs">🗑️</Text>
-                    </ActionIcon>
-                  </>
-                )}
               </MGroup>
             </MGroup>
             <Text size="sm" c="dimmed">
@@ -439,6 +449,9 @@ export function ExpenseCard({
           </div>
           <Collapse in={isExpanded}>
             <Divider my="xs" />
+            {isNew && (
+              <Badge size="xs" color="blue" variant="light" mb="xs">{t('newBadge', { defaultValue: 'New' })}</Badge>
+            )}
             {expense.expense_type === 'transfer' ? (
               <MGroup gap="xs">
                 <Text size="sm">{getMemberName(expense.paid_by)}</Text>
@@ -488,6 +501,15 @@ export function ExpenseCard({
                   );
                 })}
               </Stack>
+            )}
+            {!isPending(expense) && canEdit && (
+              <>
+                <Divider my="xs" />
+                <MGroup gap="xs">
+                  <Button size="compact-sm" variant="light" onClick={(e) => { e.stopPropagation(); onStartEdit(); }}>✏️ {t('editExpense')}</Button>
+                  <Button size="compact-sm" variant="light" color="red" onClick={(e) => { e.stopPropagation(); onDelete(); }}>🗑️ {t('deleteExpense')}</Button>
+                </MGroup>
+              </>
             )}
           </Collapse>
         </>

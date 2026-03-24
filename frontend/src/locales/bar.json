@@ -138,5 +138,6 @@
   "balanceTransferredTo": "Moos rüberschobn an {{group}}",
   "balanceTransferredFrom": "Moos rüberkemma vo {{group}}",
 
-  "language": "Sproch"
+  "language": "Sproch",
+  "newBadge": "Nei"
 }

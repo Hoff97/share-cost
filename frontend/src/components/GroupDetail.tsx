@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQueryState, parseAsStringLiteral } from 'nuqs';
 import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
   Group as MGroup, SegmentedControl, Checkbox, Badge, Card, Slider,
@@ -15,7 +16,7 @@ import type { Group, Expense, Balance, Permissions, ShareLinkItem } from '../off
 import { ExpenseCard } from './ExpenseCard';
 import { computeUserShare } from '../expenseUtils';
 import { useSync } from '../sync';
-import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, getStoredPaymentInfo, savePaymentInfo } from '../storage';
+import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, updateLastCheckedAt, getStoredPaymentInfo, savePaymentInfo } from '../storage';
 
 interface GroupDetailProps {
   group: Group;
@@ -63,6 +64,7 @@ const snapToMark = (val: number, target: number, max: number) => {
 export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: GroupDetailProps) {
   const { t } = useTranslation();
   const colorScheme = useComputedColorScheme('light');
+  const [activeTab, setActiveTab] = useQueryState('tab', parseAsStringLiteral(['expenses', 'balances', 'members'] as const).withDefault('expenses'));
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [description, setDescription] = useState('');
@@ -82,6 +84,10 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const [splitType, setSplitType] = useState('equal');
   const [splitShares, setSplitShares] = useState<Record<string, number>>({});
   const [showMyExpensesOnly, setShowMyExpensesOnly] = useState(false);
+  const [lastCheckedAt] = useState<string | null>(() => {
+    const stored = getStoredGroup(group.id);
+    return stored?.lastCheckedAt ?? null;
+  });
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(() => {
     const stored = getStoredGroup(group.id);
     return stored?.selectedMemberId ?? null;
@@ -129,7 +135,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const { syncVersion } = useSync();
 
   useEffect(() => {
-    loadData();
+    loadData().then(() => updateLastCheckedAt(group.id));
   }, [loadData]);
 
   // Re-fetch data after sync completes
@@ -149,20 +155,33 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     return () => { cancelled = true; };
   }, [expenseCurrency, expenseDate, group.currency]);
 
-
+  // Validation for the add-expense form
+  const addAmountNum = typeof amount === 'number' ? amount : parseFloat(amount as string) || 0;
+  const isAddFormValid = (() => {
+    if (!description.trim() || addAmountNum <= 0 || !paidBy) return false;
+    if (expenseType === 'transfer') return !!transferTo;
+    if (splitBetween.length === 0) return false;
+    if (splitType === 'percentage') {
+      const total = splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0);
+      return Math.abs(total - 100) < 0.01;
+    }
+    if (splitType === 'exact') {
+      const total = splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0);
+      return Math.abs(total - addAmountNum) < 0.01;
+    }
+    return true;
+  })();
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description || !amount || !paidBy) return;
-    if (expenseType === 'transfer' && !transferTo) return;
-    if (expenseType !== 'transfer' && splitBetween.length === 0) return;
+    if (!isAddFormValid) return;
 
     await api.createExpense(
       token,
       group.id,
       description,
       typeof amount === 'string' ? parseFloat(amount) : amount,
-      paidBy,
+      paidBy!,
       splitBetween,
       expenseType,
       expenseType === 'transfer' ? (transferTo ?? undefined) : undefined,
@@ -652,7 +671,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       </MGroup>
 
       {/* Tabs: Expenses / Balances / Members */}
-      <Tabs defaultValue="expenses" variant="outline">
+      <Tabs value={activeTab} onChange={(val) => setActiveTab(val as typeof activeTab)} variant="outline">
         <Tabs.List grow>
           <Tabs.Tab value="expenses">
             {expenses.length > 0 ? t('expensesCount', { count: expenses.length }) : t('expenses')}
@@ -890,7 +909,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                     clearable
                     maxDate={new Date()}
                   />
-                  <Button type="submit" fullWidth>
+                  <Button type="submit" fullWidth disabled={!isAddFormValid}>
                     {expenseType === 'transfer' ? t('addTransfer') : expenseType === 'income' ? t('addIncome') : t('addExpense')}
                   </Button>
                 </Stack>
@@ -949,6 +968,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                           canEdit={permissions.can_edit_expenses}
                           isEditing={editingExpenseId === expense.id}
                           isExpanded={expandedExpenses.has(expense.id)}
+                          isNew={!!lastCheckedAt && expense.created_at > lastCheckedAt}
                           onStartEdit={() => handleStartEditExpense(expense.id)}
                           onCancelEdit={handleCancelEditExpense}
                           onSaveEdit={(data) => handleSaveExpense(expense.id, data)}
