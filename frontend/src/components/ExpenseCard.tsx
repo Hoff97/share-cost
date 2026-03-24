@@ -434,16 +434,20 @@ export function ExpenseCard({
               </MGroup>
             </MGroup>
             <Text size="sm" c="dimmed">
-              {expense.expense_type === 'transfer' ? (
-                <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : t('unknown')}</>
-              ) : (
+              {!isExpanded && (
                 <>
-                  {expense.expense_type === 'income' ? t('receivedByName', { name: getMemberName(expense.paid_by) }) : t('paidBy', { name: getMemberName(expense.paid_by) })}
+                  {expense.expense_type === 'transfer' ? (
+                    <>{getMemberName(expense.paid_by)} → {expense.transfer_to ? getMemberName(expense.transfer_to) : t('unknown')}</>
+                  ) : (
+                    <>
+                      {expense.expense_type === 'income' ? t('receivedByName', { name: getMemberName(expense.paid_by) }) : t('paidBy', { name: getMemberName(expense.paid_by) })}
+                      {' · '}
+                      {t('splitLabel')} {expense.split_between.map(getMemberName).join(', ')}
+                    </>
+                  )}
                   {' · '}
-                  {t('splitLabel')} {expense.split_between.map(getMemberName).join(', ')}
                 </>
               )}
-              {' · '}
               <Text component="span" size="xs" c="dimmed">{formatDate(expense.expense_date)}</Text>
             </Text>
           </div>
