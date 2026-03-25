@@ -145,5 +145,12 @@
   "balanceTransferredFrom": "Solde transféré depuis {{group}}",
 
   "language": "Langue",
-  "newBadge": "Nouveau"
+  "newBadge": "Nouveau",
+
+  "convert": "Convertir",
+  "convertTitle": "Convertir l'entrée",
+  "convertIncomeToTransfersDesc": "Ce revenu sera converti en {{count}} transfert(s) :",
+  "convertTransferToIncomeDesc": "Ce transfert de {{from}} à {{to}} sera converti en revenu.",
+  "groupExpiresSoon": "Expire bientôt",
+  "groupExpiresSoonDesc": "Ce groupe sera supprimé pour inactivité. Cliquez pour le conserver."
 }

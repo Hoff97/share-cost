@@ -145,5 +145,12 @@
   "balanceTransferredFrom": "Moos rüberkemma vo {{group}}",
 
   "language": "Sproch",
-  "newBadge": "Nei"
+  "newBadge": "Nei",
+
+  "convert": "Umwandln",
+  "convertTitle": "Eintrog umwandln",
+  "convertIncomeToTransfersDesc": "De Einnahm wead in {{count}} Überweisung(en) umgwandlt:",
+  "convertTransferToIncomeDesc": "De Überweisung vo {{from}} an {{to}} wead in a Einnahm umgwandlt.",
+  "groupExpiresSoon": "Laaft boid ab",
+  "groupExpiresSoonDesc": "De Gruppn wead weng Inaktivität glöscht. Klick, um se z'behoidn."
 }

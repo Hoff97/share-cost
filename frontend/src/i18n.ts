@@ -10,13 +10,13 @@ import pl from './locales/pl.json';
 import bar from './locales/bar.json';
 
 export const LANGUAGES = [
-  { code: 'en', label: '🇬🇧 English' },
-  { code: 'de', label: '🇩🇪 Deutsch' },
-  { code: 'fr', label: '🇫🇷 Français' },
-  { code: 'it', label: '🇮🇹 Italiano' },
-  { code: 'es', label: '🇪🇸 Español' },
-  { code: 'pl', label: '🇵🇱 Polski' },
-  { code: 'bar', label: '🥨 Boarisch' },
+  { code: 'en', flag: '🇬🇧', label: '🇬🇧 English' },
+  { code: 'de', flag: '🇩🇪', label: '🇩🇪 Deutsch' },
+  { code: 'fr', flag: '🇫🇷', label: '🇫🇷 Français' },
+  { code: 'it', flag: '🇮🇹', label: '🇮🇹 Italiano' },
+  { code: 'es', flag: '🇪🇸', label: '🇪🇸 Español' },
+  { code: 'pl', flag: '🇵🇱', label: '🇵🇱 Polski' },
+  { code: 'bar', flag: '🥨', label: '🥨 Boarisch' },
 ] as const;
 
 i18n

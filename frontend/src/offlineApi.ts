@@ -324,3 +324,7 @@ export async function renameGroup(token: string, name: string): Promise<api.Grou
 export async function deleteGroup(token: string): Promise<void> {
   return api.deleteGroup(token);
 }
+
+export async function extendLifetime(token: string): Promise<void> {
+  return api.extendLifetime(token);
+}

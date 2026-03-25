@@ -1,7 +1,8 @@
-import { Title, Text, Card, Stack, Group as MGroup, Badge, ActionIcon, Paper } from '@mantine/core';
+import { Title, Text, Card, Stack, Group as MGroup, Badge, ActionIcon, Paper, Tooltip } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
 import type { StoredGroup } from '../storage';
-import { removeGroup } from '../storage';
+import { removeGroup, updateLatestActivity } from '../storage';
+import * as api from '../offlineApi';
 
 const SYM: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', JPY: '¥' };
 const fmtAmt = (n: number, c?: string) => {
@@ -66,6 +67,9 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
           group.latestActivityAt &&
           (!group.lastCheckedAt || group.latestActivityAt > group.lastCheckedAt)
         );
+        const fiveMonthsAgo = new Date();
+        fiveMonthsAgo.setMonth(fiveMonthsAgo.getMonth() - 5);
+        const isStale = !!(group.latestActivityAt && new Date(group.latestActivityAt) < fiveMonthsAgo);
         return (
         <Card
           key={group.id}
@@ -108,6 +112,19 @@ export const GroupList = ({ groups, onSelectGroup, onGroupRemoved }: GroupListPr
                   : t('selectYourselfInGroup')}
               </Text>
             </div>
+            {isStale && (
+              <Tooltip label={t('groupExpiresSoonDesc')}>
+                <Badge color="orange" variant="light" style={{ cursor: 'pointer' }} onClick={(e) => {
+                  e.stopPropagation();
+                  api.extendLifetime(group.token).then(() => {
+                    updateLatestActivity(group.id, new Date().toISOString());
+                    onGroupRemoved();
+                  });
+                }}>
+                  ⚠️ {t('groupExpiresSoon')}
+                </Badge>
+              </Tooltip>
+            )}
             {group.cachedBalance !== undefined && (
               <Badge
                 size="lg"

@@ -13,6 +13,7 @@ export interface Group {
   currency: string;
   members: Member[];
   created_at: string;
+  last_activity_at: string;
 }
 
 export interface GroupCreatedResponse {
@@ -313,5 +314,13 @@ export const deleteGroup = async (token: string): Promise<void> => {
   await fetch(`${API_BASE}/groups/current`, {
     method: 'DELETE',
     headers: authHeaders(token),
+  });
+};
+
+// Extend group lifetime
+export const extendLifetime = async (token: string): Promise<void> => {
+  await fetch(`${API_BASE}/groups/current/extend-lifetime`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
   });
 };

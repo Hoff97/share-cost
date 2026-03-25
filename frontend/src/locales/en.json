@@ -145,5 +145,12 @@
   "balanceTransferredFrom": "Balance transferred from {{group}}",
 
   "language": "Language",
-  "newBadge": "New"
+  "newBadge": "New",
+
+  "convert": "Convert",
+  "convertTitle": "Convert Entry",
+  "convertIncomeToTransfersDesc": "This income will be converted into {{count}} transfer(s):",
+  "convertTransferToIncomeDesc": "This transfer from {{from}} to {{to}} will be converted into an income entry.",
+  "groupExpiresSoon": "Expires soon",
+  "groupExpiresSoonDesc": "This group will be deleted due to inactivity. Click to keep it."
 }

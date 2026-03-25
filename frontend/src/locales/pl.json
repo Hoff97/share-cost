@@ -145,5 +145,12 @@
   "balanceTransferredFrom": "Saldo przeniesione z {{group}}",
 
   "language": "Język",
-  "newBadge": "Nowy"
+  "newBadge": "Nowy",
+
+  "convert": "Konwertuj",
+  "convertTitle": "Konwertuj wpis",
+  "convertIncomeToTransfersDesc": "Ten przychód zostanie przekonwertowany na {{count}} przelew(y):",
+  "convertTransferToIncomeDesc": "Ten przelew od {{from}} do {{to}} zostanie przekonwertowany na przychód.",
+  "groupExpiresSoon": "Wkrótce wygaśnie",
+  "groupExpiresSoonDesc": "Ta grupa zostanie usunięta z powodu braku aktywności. Kliknij, aby ją zachować."
 }

@@ -145,5 +145,12 @@
   "balanceTransferredFrom": "Bilanz übertragen von {{group}}",
 
   "language": "Sprache",
-  "newBadge": "Neu"
+  "newBadge": "Neu",
+
+  "convert": "Umwandeln",
+  "convertTitle": "Eintrag umwandeln",
+  "convertIncomeToTransfersDesc": "Diese Einnahme wird in {{count}} Überweisung(en) umgewandelt:",
+  "convertTransferToIncomeDesc": "Diese Überweisung von {{from}} an {{to}} wird in eine Einnahme umgewandelt.",
+  "groupExpiresSoon": "Läuft bald ab",
+  "groupExpiresSoonDesc": "Diese Gruppe wird wegen Inaktivität gelöscht. Klicken, um sie zu behalten."
 }

@@ -29,7 +29,7 @@ async fn create_group(
     let currency = request.currency.as_deref().unwrap_or("EUR");
 
     // Insert group
-    sqlx::query("INSERT INTO groups (id, name, currency, created_at) VALUES ($1, $2, $3, $4)")
+    sqlx::query("INSERT INTO groups (id, name, currency, created_at, last_activity_at) VALUES ($1, $2, $3, $4, $4)")
         .bind(group_id)
         .bind(&request.name)
         .bind(currency)
@@ -71,6 +71,7 @@ async fn create_group(
         currency: currency.to_string(),
         members,
         created_at,
+        last_activity_at: created_at,
     };
 
     // Generate JWT for this group (creator gets all permissions)
@@ -87,7 +88,7 @@ async fn get_current_group(auth: GroupAuth) -> Result<Json<Group>, Status> {
 
     // Get group
     let group_row: GroupRow =
-        sqlx::query_as("SELECT id, name, currency, created_at FROM groups WHERE id = $1")
+        sqlx::query_as("SELECT id, name, currency, created_at, last_activity_at FROM groups WHERE id = $1")
             .bind(auth.group_id)
             .fetch_optional(pool)
             .await
@@ -123,6 +124,7 @@ async fn get_current_group(auth: GroupAuth) -> Result<Json<Group>, Status> {
             })
             .collect(),
         created_at: group_row.created_at,
+        last_activity_at: group_row.last_activity_at,
     };
 
     Ok(Json(group))
@@ -141,7 +143,7 @@ async fn add_member(
 
     // Check group exists
     let group_row: GroupRow =
-        sqlx::query_as("SELECT id, name, currency, created_at FROM groups WHERE id = $1")
+        sqlx::query_as("SELECT id, name, currency, created_at, last_activity_at FROM groups WHERE id = $1")
             .bind(auth.group_id)
             .fetch_optional(pool)
             .await
@@ -162,6 +164,16 @@ async fn add_member(
         .await
         .map_err(|e| {
             eprintln!("Failed to create member: {}", e);
+            Status::InternalServerError
+        })?;
+
+    // Update last_activity_at
+    sqlx::query("UPDATE groups SET last_activity_at = NOW() WHERE id = $1")
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to update last_activity_at: {}", e);
             Status::InternalServerError
         })?;
 
@@ -191,6 +203,7 @@ async fn add_member(
             })
             .collect(),
         created_at: group_row.created_at,
+        last_activity_at: group_row.last_activity_at,
     };
 
     Ok(Json(group))
@@ -328,7 +341,7 @@ async fn create_expense(
 
     // Get group for default currency
     let group_row: GroupRow =
-        sqlx::query_as("SELECT id, name, currency, created_at FROM groups WHERE id = $1")
+        sqlx::query_as("SELECT id, name, currency, created_at, last_activity_at FROM groups WHERE id = $1")
             .bind(auth.group_id)
             .fetch_one(pool)
             .await
@@ -396,6 +409,16 @@ async fn create_expense(
     } else {
         None
     };
+
+    // Update last_activity_at
+    sqlx::query("UPDATE groups SET last_activity_at = NOW() WHERE id = $1")
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to update last_activity_at: {}", e);
+            Status::InternalServerError
+        })?;
 
     let expense = Expense {
         id: expense_id,
@@ -516,6 +539,16 @@ async fn update_expense(
         None
     };
 
+    // Update last_activity_at
+    sqlx::query("UPDATE groups SET last_activity_at = NOW() WHERE id = $1")
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to update last_activity_at: {}", e);
+            Status::InternalServerError
+        })?;
+
     let expense = Expense {
         id: expense_uuid,
         group_id: auth.group_id,
@@ -577,6 +610,16 @@ async fn delete_expense(auth: GroupAuth, expense_id: &str) -> Result<Status, Sta
         .await
         .map_err(|e| {
             eprintln!("Failed to delete expense: {}", e);
+            Status::InternalServerError
+        })?;
+
+    // Update last_activity_at
+    sqlx::query("UPDATE groups SET last_activity_at = NOW() WHERE id = $1")
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to update last_activity_at: {}", e);
             Status::InternalServerError
         })?;
 
@@ -1030,9 +1073,19 @@ async fn rename_group(
             Status::InternalServerError
         })?;
 
+    // Update last_activity_at
+    sqlx::query("UPDATE groups SET last_activity_at = NOW() WHERE id = $1")
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to update last_activity_at: {}", e);
+            Status::InternalServerError
+        })?;
+
     // Return updated group
     let group_row: GroupRow =
-        sqlx::query_as("SELECT id, name, currency, created_at FROM groups WHERE id = $1")
+        sqlx::query_as("SELECT id, name, currency, created_at, last_activity_at FROM groups WHERE id = $1")
             .bind(auth.group_id)
             .fetch_one(pool)
             .await
@@ -1055,6 +1108,7 @@ async fn rename_group(
         currency: group_row.currency,
         members: member_rows.into_iter().map(Member::from).collect(),
         created_at: group_row.created_at,
+        last_activity_at: group_row.last_activity_at,
     };
 
     Ok(Json(group))
@@ -1107,6 +1161,21 @@ async fn delete_group(auth: GroupAuth) -> Result<Status, Status> {
     Ok(Status::NoContent)
 }
 
+// Extend group lifetime - resets the inactivity timer
+#[post("/groups/current/extend-lifetime")]
+async fn extend_lifetime(auth: GroupAuth) -> Result<Status, Status> {
+    let pool = db::get_pool();
+    sqlx::query("UPDATE groups SET last_activity_at = NOW() WHERE id = $1")
+        .bind(auth.group_id)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            eprintln!("Failed to extend lifetime: {}", e);
+            Status::InternalServerError
+        })?;
+    Ok(Status::NoContent)
+}
+
 pub fn get_routes() -> Vec<Route> {
     routes![
         health,
@@ -1126,6 +1195,7 @@ pub fn get_routes() -> Vec<Route> {
         redeem_share_code,
         merge_token,
         rename_group,
-        delete_group
+        delete_group,
+        extend_lifetime
     ]
 }

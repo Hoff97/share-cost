@@ -3,7 +3,7 @@ import {
   Text, Card, Badge, Collapse, Divider, Stack,
   Group as MGroup, SegmentedControl, TextInput, NumberInput, Select,
   Checkbox, Slider,
-  Button,
+  Button, Modal,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { useTranslation } from 'react-i18next';
@@ -66,6 +66,7 @@ export interface ExpenseCardProps {
     splits?: SplitEntry[];
   }) => void;
   onDelete: () => void;
+  onConvert?: () => void;
   onToggleExpand: () => void;
 }
 
@@ -82,9 +83,12 @@ export function ExpenseCard({
   onCancelEdit,
   onSaveEdit,
   onDelete,
+  onConvert,
   onToggleExpand,
 }: ExpenseCardProps) {
   const { t } = useTranslation();
+
+  const [showConvertModal, setShowConvertModal] = useState(false);
 
   // Edit state
   const [editDescription, setEditDescription] = useState(expense.description);
@@ -190,11 +194,32 @@ export function ExpenseCard({
           : expense.expense_type === 'income'
           ? 'var(--mantine-color-yellow-6)'
           : 'var(--mantine-color-blue-6)',
-        ...(isNew ? {
-          background: 'light-dark(var(--mantine-color-blue-0), var(--mantine-color-blue-9))',
-        } : {}),
+        position: 'relative',
+        overflow: 'visible',
       }}
     >
+      {isNew && (
+        <div style={{
+          position: 'absolute',
+          top: -6,
+          left: -6,
+          background: 'var(--mantine-color-blue-6)',
+          color: 'white',
+          borderRadius: '999px',
+          minWidth: 20,
+          height: 20,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 11,
+          fontWeight: 700,
+          padding: '0 5px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+          zIndex: 1,
+        }}>
+          {t('newBadge')}
+        </div>
+      )}
       {isEditing ? (
         <Stack gap="sm">
           <SegmentedControl
@@ -454,9 +479,6 @@ export function ExpenseCard({
           </div>
           <Collapse in={isExpanded}>
             <Divider my="xs" />
-            {isNew && (
-              <Badge size="xs" color="blue" variant="light" mb="xs">{t('newBadge', { defaultValue: 'New' })}</Badge>
-            )}
             {expense.expense_type === 'transfer' ? (
               <MGroup gap="xs">
                 <Text size="sm">{getMemberName(expense.paid_by)}</Text>
@@ -513,12 +535,52 @@ export function ExpenseCard({
                 <MGroup gap="xs">
                   <Button size="compact-sm" variant="light" onClick={(e) => { e.stopPropagation(); onStartEdit(); }}>✏️ {t('editExpense')}</Button>
                   <Button size="compact-sm" variant="light" color="red" onClick={(e) => { e.stopPropagation(); onDelete(); }}>🗑️ {t('deleteExpense')}</Button>
+                  {onConvert && (expense.expense_type === 'income' || expense.expense_type === 'transfer') && (
+                    <Button size="compact-sm" variant="light" color="violet" onClick={(e) => { e.stopPropagation(); setShowConvertModal(true); }}>
+                      🔄 {t('convert')}
+                    </Button>
+                  )}
                 </MGroup>
               </>
             )}
           </Collapse>
         </>
       )}
+
+      {/* Convert confirmation modal */}
+      <Modal opened={showConvertModal} onClose={() => setShowConvertModal(false)} title={t('convertTitle')} centered size="sm">
+        <Stack gap="sm">
+          {expense.expense_type === 'income' ? (
+            <>
+              <Text size="sm">{t('convertIncomeToTransfersDesc', { count: expense.split_between.filter(id => id !== expense.paid_by).length })}</Text>
+              <Stack gap={4}>
+                {expense.split_between.filter(id => id !== expense.paid_by).map(memberId => {
+                  const splitEntry = expense.splits?.find(s => s.member_id === memberId);
+                  let share: number;
+                  if (expense.split_type === 'percentage' && splitEntry?.share != null) {
+                    share = expense.amount * splitEntry.share / 100;
+                  } else if (expense.split_type === 'exact' && splitEntry?.share != null) {
+                    share = splitEntry.share;
+                  } else {
+                    share = expense.amount / expense.split_between.length;
+                  }
+                  return (
+                    <Text key={memberId} size="sm" c="dimmed">
+                      {getMemberName(memberId)} → {getMemberName(expense.paid_by)}: {fmtAmt(share, expense.currency)}
+                    </Text>
+                  );
+                })}
+              </Stack>
+            </>
+          ) : (
+            <Text size="sm">{t('convertTransferToIncomeDesc', { from: getMemberName(expense.paid_by), to: getMemberName(expense.transfer_to || '') })}</Text>
+          )}
+          <MGroup justify="flex-end" gap="xs">
+            <Button variant="default" onClick={() => setShowConvertModal(false)}>{t('cancel')}</Button>
+            <Button color="violet" onClick={() => { setShowConvertModal(false); onConvert?.(); }}>{t('convert')}</Button>
+          </MGroup>
+        </Stack>
+      </Modal>
     </Card>
   );
 }

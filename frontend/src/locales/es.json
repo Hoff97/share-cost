@@ -145,5 +145,12 @@
   "balanceTransferredFrom": "Saldo transferido desde {{group}}",
 
   "language": "Idioma",
-  "newBadge": "Nuevo"
+  "newBadge": "Nuevo",
+
+  "convert": "Convertir",
+  "convertTitle": "Convertir entrada",
+  "convertIncomeToTransfersDesc": "Este ingreso se convertirá en {{count}} transferencia(s):",
+  "convertTransferToIncomeDesc": "Esta transferencia de {{from}} a {{to}} se convertirá en un ingreso.",
+  "groupExpiresSoon": "Expira pronto",
+  "groupExpiresSoonDesc": "Este grupo se eliminará por inactividad. Haz clic para conservarlo."
 }

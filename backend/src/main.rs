@@ -75,6 +75,27 @@ fn rocket() -> _ {
             },
         ))
         .mount("/api", routes::get_routes())
+        .attach(AdHoc::on_liftoff("Cleanup Scheduler", |_rocket| Box::pin(async {
+            rocket::tokio::spawn(async {
+                let mut interval = rocket::tokio::time::interval(rocket::tokio::time::Duration::from_secs(24 * 60 * 60));
+                loop {
+                    interval.tick().await;
+                    let pool = db::get_pool();
+                    match sqlx::query("DELETE FROM groups WHERE last_activity_at < NOW() - INTERVAL '6 months'")
+                        .execute(pool)
+                        .await
+                    {
+                        Ok(result) => {
+                            let count = result.rows_affected();
+                            if count > 0 {
+                                println!("Cleanup: deleted {} inactive group(s)", count);
+                            }
+                        }
+                        Err(e) => eprintln!("Cleanup failed: {}", e),
+                    }
+                }
+            });
+        })))
         .mount("/", routes![manifest, index, spa_fallback])
         .attach(AdHoc::on_ignite("Static Files", |rocket| async {
             if Path::new("static").is_dir() {

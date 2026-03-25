@@ -16,7 +16,7 @@ import type { Group, Expense, Balance, Permissions, ShareLinkItem } from '../off
 import { ExpenseCard } from './ExpenseCard';
 import { computeUserShare } from '../expenseUtils';
 import { useSync } from '../sync';
-import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, updateLastCheckedAt, getStoredPaymentInfo, savePaymentInfo, setShowMyExpensesOnly as setShowMyExpensesOnlyStorage } from '../storage';
+import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, updateLastCheckedAt, updateLatestActivity, getStoredPaymentInfo, savePaymentInfo, setShowMyExpensesOnly as setShowMyExpensesOnlyStorage } from '../storage';
 
 interface GroupDetailProps {
   group: Group;
@@ -144,8 +144,11 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const { syncVersion } = useSync();
 
   useEffect(() => {
-    loadData().then(() => updateLastCheckedAt(group.id));
-  }, [loadData]);
+    loadData().then(() => {
+      updateLastCheckedAt(group.id);
+      updateLatestActivity(group.id, group.last_activity_at);
+    });
+  }, [loadData, group.id, group.last_activity_at]);
 
   // Re-fetch data after sync completes
   useEffect(() => {
@@ -405,6 +408,45 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     loadData();
   };
 
+  const handleConvertExpense = async (expense: Expense) => {
+    if (expense.expense_type === 'income') {
+      // Income → N transfers: each person in split_between sends their share to paid_by
+      const recipients = expense.split_between.filter(id => id !== expense.paid_by);
+      const splitCount = expense.split_between.length;
+      const shareAmount = Math.round((expense.amount / splitCount) * 100) / 100;
+      for (const memberId of recipients) {
+        await api.createExpense(
+          token, group.id,
+          expense.description,
+          shareAmount,
+          memberId,          // paid_by (the person sending money)
+          [],                // splitBetween (not used for transfers)
+          'transfer',
+          expense.paid_by,   // transfer_to (the income receiver)
+          expense.expense_date,
+          expense.currency,
+          expense.exchange_rate,
+        );
+      }
+    } else if (expense.expense_type === 'transfer') {
+      // Transfer → income: create income paid to transfer_to, split between [paid_by]
+      await api.createExpense(
+        token, group.id,
+        expense.description,
+        expense.amount,
+        expense.transfer_to!,  // the person who was receiving the transfer now receives the income
+        [expense.paid_by],     // split between the person who was sending the transfer
+        'income',
+        undefined,
+        expense.expense_date,
+        expense.currency,
+        expense.exchange_rate,
+      );
+    }
+    await api.deleteExpense(token, group.id, expense.id);
+    loadData();
+  };
+
   const myBalance = selectedMemberId
     ? balances.find(b => b.user_id === selectedMemberId)
     : null;
@@ -414,6 +456,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const [addEntryOpened, { toggle: toggleAddEntry, close: closeAddEntry }] = useDisclosure(false);
   const [expandedBalances, setExpandedBalances] = useState<Set<string>>(new Set());
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
+  const [totalExpanded, setTotalExpanded] = useState(false);
 
   const toggleExpenseExpanded = (expenseId: string) => {
     setExpandedExpenses(prev => {
@@ -701,22 +744,13 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
 
         {/* Expenses Tab */}
         <Tabs.Panel value="expenses" pt="md">
-          {/* Collapsible Add Entry — only shown if user can add expenses */}
+          {/* Add Entry Modal — only shown if user can add expenses */}
           {permissions.can_add_expenses && (
-          <Paper shadow="xs" p="md" radius="md" withBorder mb="md">
-            <MGroup
-              justify="space-between"
-              align="center"
-              onClick={toggleAddEntry}
-              style={{ cursor: 'pointer', userSelect: 'none' }}
-            >
-              <Title order={4}>{t('addEntry')}</Title>
-              <Text size="xl" c="dimmed" style={{ transition: 'transform 200ms', transform: addEntryOpened ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                ▾
-              </Text>
-            </MGroup>
-            <Collapse in={addEntryOpened}>
-              <Divider my="sm" />
+          <>
+          <Button fullWidth mb="md" onClick={toggleAddEntry}>
+            {t('addEntry')}
+          </Button>
+          <Modal opened={addEntryOpened} onClose={closeAddEntry} title={t('addEntry')} centered size="md">
               <form onSubmit={(e) => { handleAddExpense(e); closeAddEntry(); }}>
                 <Stack gap="sm">
                   <SegmentedControl
@@ -929,8 +963,8 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   </Button>
                 </Stack>
               </form>
-            </Collapse>
-          </Paper>
+          </Modal>
+          </>
           )}
 
           {selectedMemberId && (
@@ -968,7 +1002,10 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                 }, 0);
 
                 const totalUser = selectedMemberId
-                  ? expenses.reduce((sum, exp) => sum + computeUserShare(exp, selectedMemberId), 0)
+                  ? expenses.reduce((sum, exp) => {
+                      if (exp.expense_type === 'transfer') return sum;
+                      return sum + computeUserShare(exp, selectedMemberId);
+                    }, 0)
                   : null;
 
                 return (
@@ -991,21 +1028,42 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                           onCancelEdit={handleCancelEditExpense}
                           onSaveEdit={(data) => handleSaveExpense(expense.id, data)}
                           onDelete={() => setDeleteExpenseId(expense.id)}
+                          onConvert={() => handleConvertExpense(expense)}
                           onToggleExpand={() => toggleExpenseExpanded(expense.id)}
                         />
                       ))
                     )}
-                    <Paper p="sm" radius="md" bg="light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))" mt="xs">
+                    <Paper p="sm" radius="md" bg="light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6))" mt="xs" style={{ cursor: 'pointer' }} onClick={() => setTotalExpanded(v => !v)}>
                       <MGroup justify="space-between">
-                        <Text size="sm" fw={600}>{t('totalExpenses')}</Text>
+                        <MGroup gap="xs">
+                          <Text size="sm" c="dimmed" style={{ transition: 'transform 200ms', transform: totalExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▾</Text>
+                          <Text size="sm" fw={600}>{t('totalExpenses')}</Text>
+                        </MGroup>
                         <Text size="sm" fw={700} c="blue">{fmtAmt(totalAll, group.currency)}</Text>
                       </MGroup>
                       {totalUser != null && (
                         <MGroup justify="space-between" mt={4}>
-                          <Text size="sm" fw={600}>{t('yourTotal')}</Text>
+                          <Text size="sm" fw={600} pl={20}>{t('yourTotal')}</Text>
                           <Text size="sm" fw={700} c={totalUser >= 0 ? 'teal' : 'red'}>{fmtAmt(totalUser, group.currency)}</Text>
                         </MGroup>
                       )}
+                      <Collapse in={totalExpanded}>
+                        <Divider my="xs" />
+                        {group.members
+                          .filter(m => m.id !== selectedMemberId)
+                          .map(m => {
+                            const memberTotal = expenses.reduce((sum, exp) => {
+                              if (exp.expense_type === 'transfer') return sum;
+                              return sum + computeUserShare(exp, m.id);
+                            }, 0);
+                            return (
+                              <MGroup key={m.id} justify="space-between" mt={2}>
+                                <Text size="xs" c="dimmed">{m.name}</Text>
+                                <Text size="xs" fw={600} c={memberTotal >= 0 ? 'teal' : 'red'}>{fmtAmt(memberTotal, group.currency)}</Text>
+                              </MGroup>
+                            );
+                          })}
+                      </Collapse>
                     </Paper>
                   </>
                 );

@@ -11,6 +11,7 @@ pub struct GroupRow {
     pub name: String,
     pub currency: String,
     pub created_at: DateTime<Utc>,
+    pub last_activity_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -62,6 +63,7 @@ pub struct Group {
     pub currency: String,
     pub members: Vec<Member>,
     pub created_at: DateTime<Utc>,
+    pub last_activity_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

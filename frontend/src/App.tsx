@@ -36,7 +36,7 @@ function DarkModeToggle() {
   return (
     <ActionIcon
       variant="default"
-      size="lg"
+      size="md"
       onClick={() => setColorScheme(computedScheme === 'dark' ? 'light' : 'dark')}
       aria-label="Toggle dark mode"
     >
@@ -50,16 +50,20 @@ function LanguageSelector({ i18n }: { i18n: { language: string; changeLanguage: 
   const resolved = LANGUAGES.find(l => l.code === lang)?.code
     ?? LANGUAGES.find(l => l.code === lang.substring(0, 2))?.code
     ?? 'en';
+  const currentFlag = LANGUAGES.find(l => l.code === resolved)?.flag ?? '🇬🇧';
   return (
     <Select
       size="xs"
-      w={110}
+      w={55}
       data={LANGUAGES.map(l => ({ value: l.code, label: l.label }))}
       value={resolved}
       onChange={(val) => val && i18n.changeLanguage(val)}
       allowDeselect={false}
       withCheckIcon={false}
-      styles={{ input: { textAlign: 'center' } }}
+      styles={{ input: { textAlign: 'center', color: 'transparent', caretColor: 'transparent' } }}
+      leftSection={<span style={{ fontSize: 18 }}>{currentFlag}</span>}
+      leftSectionWidth={36}
+      comboboxProps={{ width: 100, position: 'bottom-end' }}
     />
   );
 }
@@ -179,6 +183,7 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hintDismissed, setHintDismissed] = useState(() => localStorage.getItem('share-cost-hint-dismissed') === '1');
   const [storedGroups, setStoredGroups] = useState<StoredGroup[]>([]);
   const [urlGroupId, setUrlGroupId] = useQueryState('group', parseAsString);
 
@@ -338,7 +343,7 @@ function AppContent() {
       <Container size="sm" py="xl">
         <MGroup justify="space-between" align="center" mb="md">
           <Title order={1}>{t('appTitle')}</Title>
-          <MGroup gap="xs">
+          <MGroup gap="sm">
             <LanguageSelector i18n={i18n} />
             <DarkModeToggle />
           </MGroup>
@@ -355,7 +360,7 @@ function AppContent() {
       <Container size="sm" py="xl">
         <MGroup justify="space-between" align="center" mb="md">
           <Title order={1}>{t('appTitle')}</Title>
-          <MGroup gap="xs">
+          <MGroup gap="sm">
             <LanguageSelector i18n={i18n} />
             <DarkModeToggle />
           </MGroup>
@@ -377,7 +382,7 @@ function AppContent() {
       <Container size="sm" py="xl">
         <MGroup justify="space-between" align="center" mb="lg">
           <Title order={1} style={{ cursor: 'pointer' }} onClick={handleBackToList}>{t('appTitle')}</Title>
-          <MGroup gap="xs">
+          <MGroup gap="sm">
             <LanguageSelector i18n={i18n} />
             <DarkModeToggle />
           </MGroup>
@@ -396,12 +401,11 @@ function AppContent() {
     <Container size="sm" py="xl">
       <MGroup justify="space-between" align="center" mb="md">
         <Title order={1}>{t('appTitle')}</Title>
-        <MGroup gap="xs">
+        <MGroup gap="sm">
           <LanguageSelector i18n={i18n} />
           <DarkModeToggle />
         </MGroup>
       </MGroup>
-      <Text c="dimmed" ta="center">{t('tagline')}</Text>
       <InstallBanner />
       {showCreate ? (
         <CreateGroup
@@ -411,8 +415,13 @@ function AppContent() {
       ) : (
         <Paper shadow="xs" p="xl" mt="lg" radius="md">
           <Stack align="center" gap="md">
-            <Text>{t('createGroupPrompt')}</Text>
-            <Text>{t('shareGroupPrompt')}</Text>
+            {!hintDismissed && (
+              <Paper p="sm" radius="md" withBorder style={{ position: 'relative', width: '100%' }}>
+                <CloseButton size="sm" style={{ position: 'absolute', top: 4, right: 4 }} onClick={() => { setHintDismissed(true); localStorage.setItem('share-cost-hint-dismissed', '1'); }} />
+                <Text ta="center" pr={20}>{t('createGroupPrompt')}</Text>
+                <Text ta="center" pr={20}>{t('shareGroupPrompt')}</Text>
+              </Paper>
+            )}
             <Button size="lg" onClick={() => setShowCreate(true)}>
               {t('createNewGroup')}
             </Button>
