@@ -8,6 +8,7 @@ import it from './locales/it.json';
 import es from './locales/es.json';
 import pl from './locales/pl.json';
 import bar from './locales/bar.json';
+import lld from './locales/lld.json';
 
 export const LANGUAGES = [
   { code: 'en', flag: '🇬🇧', label: '🇬🇧 English' },
@@ -17,6 +18,7 @@ export const LANGUAGES = [
   { code: 'es', flag: '🇪🇸', label: '🇪🇸 Español' },
   { code: 'pl', flag: '🇵🇱', label: '🇵🇱 Polski' },
   { code: 'bar', flag: '🥨', label: '🥨 Boarisch' },
+  { code: 'lld', flag: '🏔️', label: '🏔️ Ladin' },
 ] as const;
 
 i18n
@@ -31,6 +33,7 @@ i18n
       es: { translation: es },
       pl: { translation: pl },
       bar: { translation: bar },
+      lld: { translation: lld },
     },
     fallbackLng: 'en',
     interpolation: { escapeValue: false },
