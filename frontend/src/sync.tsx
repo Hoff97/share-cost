@@ -11,6 +11,7 @@ interface SyncContextValue {
   pendingCount: number;
   syncing: boolean;
   syncVersion: number;
+  initialSyncDone: boolean;
   triggerSync: () => void;
   refreshPending: () => Promise<void>;
 }
@@ -20,6 +21,7 @@ const SyncContext = createContext<SyncContextValue>({
   pendingCount: 0,
   syncing: false,
   syncVersion: 0,
+  initialSyncDone: false,
   triggerSync: () => {},
   refreshPending: async () => {},
 });
@@ -84,6 +86,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [syncVersion, setSyncVersion] = useState(0);
+  const [initialSyncDone, setInitialSyncDone] = useState(false);
   const syncingRef = useRef(false);
 
   const refreshPending = useCallback(async () => {
@@ -140,7 +143,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, [refreshPending]);
 
   // Initial pending count + sync on mount if online
-  useEffect(() => { refreshPending(); doSync(); }, [refreshPending, doSync]);
+  useEffect(() => {
+    refreshPending();
+    doSync().finally(() => setInitialSyncDone(true));
+  }, [refreshPending, doSync]);
 
   // Online / offline events
   useEffect(() => {
@@ -164,7 +170,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const triggerSync = useCallback(() => { doSync(); }, [doSync]);
 
   return (
-    <SyncContext.Provider value={{ isOnline, pendingCount, syncing, syncVersion, triggerSync, refreshPending }}>
+    <SyncContext.Provider value={{ isOnline, pendingCount, syncing, syncVersion, initialSyncDone, triggerSync, refreshPending }}>
       {children}
     </SyncContext.Provider>
   );

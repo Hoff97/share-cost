@@ -244,7 +244,7 @@ export function ExpenseCard({
               { label: t('income'), value: 'income' },
             ]}
           />
-          <Tooltip label={t('expenseTypeHelp')} multiline w={260} withArrow>
+          <Tooltip label={t('expenseTypeHelp')} multiline w={260} withArrow styles={{ tooltip: { whiteSpace: 'pre-line' } }}>
             <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
               <Text size="xs">?</Text>
             </ActionIcon>
@@ -335,7 +335,7 @@ export function ExpenseCard({
                 <>
                   <MGroup gap={4} align="center">
                     <Text size="sm" fw={500}>{t('splitMethod')}</Text>
-                    <Tooltip label={t('splitMethodHelp')} multiline w={260} withArrow>
+                    <Tooltip label={t('splitMethodHelp')} multiline w={260} withArrow styles={{ tooltip: { whiteSpace: 'pre-line' } }}>
                       <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
                         <Text size="xs">?</Text>
                       </ActionIcon>

@@ -255,6 +255,7 @@ function InstallBanner() {
 
 function AppContent() {
   const { t, i18n } = useTranslation();
+  const { initialSyncDone } = useSync();
   const [group, setGroup] = useState<Group | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -265,6 +266,7 @@ function AppContent() {
   const [urlGroupId, setUrlGroupId] = useQueryState('group', parseAsString);
 
   useEffect(() => {
+    if (!initialSyncDone) return;
     setStoredGroups(getStoredGroups());
     const shareCode = getShareCodeFromUrl();
     const urlToken = getTokenFromUrl();
@@ -288,7 +290,7 @@ function AppContent() {
     }
     // Prefetch all stored groups in the background for offline access
     api.prefetchAllGroups().then(() => setStoredGroups(getStoredGroups()));
-  }, []);
+  }, [initialSyncDone]);
 
   // Auto-match user identity from other groups when entering a new group
   const autoMatchMember = (groupData: Group, groupId: string) => {

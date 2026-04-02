@@ -141,14 +141,15 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     }
   }, [token, selectedMemberId, group.id, group.currency]);
 
-  const { syncVersion } = useSync();
+  const { syncVersion, initialSyncDone } = useSync();
 
   useEffect(() => {
+    if (!initialSyncDone) return;
     loadData().then(() => {
       updateLastCheckedAt(group.id);
       updateLatestActivity(group.id, group.last_activity_at);
     });
-  }, [loadData, group.id, group.last_activity_at]);
+  }, [loadData, group.id, group.last_activity_at, initialSyncDone]);
 
   // Re-fetch data after sync completes
   useEffect(() => {
@@ -776,7 +777,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       { label: t('income'), value: 'income' },
                     ]}
                   />
-                  <Tooltip label={t('expenseTypeHelp')} multiline w={260} withArrow>
+                  <Tooltip label={t('expenseTypeHelp')} multiline w={260} withArrow styles={{ tooltip: { whiteSpace: 'pre-line' } }}>
                     <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
                       <Text size="xs">?</Text>
                     </ActionIcon>
@@ -867,7 +868,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         <>
                           <MGroup gap={4} align="center">
                             <Text size="sm" fw={500}>{t('splitMethod')}</Text>
-                            <Tooltip label={t('splitMethodHelp')} multiline w={260} withArrow>
+                            <Tooltip label={t('splitMethodHelp')} multiline w={260} withArrow styles={{ tooltip: { whiteSpace: 'pre-line' } }}>
                               <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
                                 <Text size="xs">?</Text>
                               </ActionIcon>
