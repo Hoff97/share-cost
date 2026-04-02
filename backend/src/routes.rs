@@ -727,6 +727,13 @@ async fn get_balances(auth: GroupAuth) -> Result<Json<Vec<Balance>>, Status> {
                                 .unwrap_or(raw_amount / split_count);
                             exact * exchange_rate
                         }
+                        "shares" => {
+                            let total_shares: f64 = splits.iter()
+                                .map(|s| s.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(0.0))
+                                .sum();
+                            let my_shares = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(0.0);
+                            if total_shares > 0.0 { amount * my_shares / total_shares } else { 0.0 }
+                        }
                         _ => amount / split_count, // equal
                     };
                     if let Some(member) = balances.iter_mut().find(|b| b.user_id == split.member_id)
@@ -776,6 +783,13 @@ async fn get_balances(auth: GroupAuth) -> Result<Json<Vec<Balance>>, Status> {
                                 .and_then(|v| v.to_f64())
                                 .unwrap_or(raw_amount / split_count);
                             exact * exchange_rate
+                        }
+                        "shares" => {
+                            let total_shares: f64 = splits.iter()
+                                .map(|s| s.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(0.0))
+                                .sum();
+                            let my_shares = split.share.as_ref().and_then(|v| v.to_f64()).unwrap_or(0.0);
+                            if total_shares > 0.0 { amount * my_shares / total_shares } else { 0.0 }
                         }
                         _ => amount / split_count, // equal
                     };

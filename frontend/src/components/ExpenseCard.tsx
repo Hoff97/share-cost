@@ -177,6 +177,9 @@ export function ExpenseCard({
       share = expense.amount * splitEntry.share / 100;
     } else if (expense.split_type === 'exact' && splitEntry?.share != null) {
       share = splitEntry.share;
+    } else if (expense.split_type === 'shares' && splitEntry?.share != null && expense.splits) {
+      const totalShares = expense.splits.reduce((s, e) => s + (e.share ?? 0), 0);
+      share = totalShares > 0 ? expense.amount * splitEntry.share / totalShares : 0;
     } else {
       share = expense.amount / expense.split_between.length;
     }
