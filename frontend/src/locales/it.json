@@ -74,6 +74,8 @@
   "noMatchingExpenses": "Nessuna spesa corrispondente.",
   "totalExpenses": "Totale spese",
   "yourTotal": "Il tuo totale",
+  "totalPaid": "Totale pagato",
+  "expenseShare": "Quota",
 
   "pendingBadge": "In sospeso",
   "transferBadge": "Trasferimento",

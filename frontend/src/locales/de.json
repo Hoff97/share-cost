@@ -74,6 +74,8 @@
   "noMatchingExpenses": "Keine passenden Einträge.",
   "totalExpenses": "Gesamtausgaben",
   "yourTotal": "Dein Anteil",
+  "totalPaid": "Insgesamt bezahlt",
+  "expenseShare": "Anteil",
 
   "pendingBadge": "Ausstehend",
   "transferBadge": "Überweisung",

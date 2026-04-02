@@ -74,6 +74,8 @@
   "noMatchingExpenses": "No matching entries.",
   "totalExpenses": "Total expenses",
   "yourTotal": "Your total",
+  "totalPaid": "Total paid",
+  "expenseShare": "Share",
 
   "pendingBadge": "Pending",
   "transferBadge": "Transfer",

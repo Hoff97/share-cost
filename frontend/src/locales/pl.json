@@ -74,6 +74,8 @@
   "noMatchingExpenses": "Brak pasujących wydatków.",
   "totalExpenses": "Suma wydatków",
   "yourTotal": "Twój udział",
+  "totalPaid": "Łącznie zapłacono",
+  "expenseShare": "Udział",
 
   "pendingBadge": "Oczekujący",
   "transferBadge": "Przelew",

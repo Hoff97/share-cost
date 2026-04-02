@@ -1082,20 +1082,34 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       )}
                       <Collapse in={totalExpanded}>
                         <Divider my="xs" />
-                        {group.members
-                          .filter(m => m.id !== selectedMemberId)
-                          .map(m => {
-                            const memberTotal = expenses.reduce((sum, exp) => {
-                              if (exp.expense_type === 'transfer') return sum;
-                              return sum + computeUserShare(exp, m.id);
-                            }, 0);
-                            return (
-                              <MGroup key={m.id} justify="space-between" mt={2}>
-                                <Text size="xs" c="dimmed">{m.name}</Text>
-                                <Text size="xs" fw={600} c={memberTotal >= 0 ? 'teal' : 'red'}>{fmtAmt(memberTotal, group.currency)}</Text>
-                              </MGroup>
-                            );
-                          })}
+                        <MGroup justify="space-between" mb={4}>
+                          <Text size="xs" fw={600} c="dimmed" style={{ flex: 1 }}></Text>
+                          <Text size="xs" fw={600} c="dimmed" w={80} ta="right">{t('expenseShare')}</Text>
+                          <Text size="xs" fw={600} c="dimmed" w={80} ta="right">{t('totalPaid')}</Text>
+                        </MGroup>
+                        {group.members.map(m => {
+                          const memberTotal = expenses.reduce((sum, exp) => {
+                            if (exp.expense_type === 'transfer') return sum;
+                            return sum + computeUserShare(exp, m.id);
+                          }, 0);
+                          const paid = expenses.reduce((sum, exp) => {
+                            const amt = exp.amount * exp.exchange_rate;
+                            if (exp.expense_type === 'transfer') {
+                              if (exp.paid_by === m.id) return sum + amt;
+                              if (exp.transfer_to === m.id) return sum - amt;
+                              return sum;
+                            }
+                            if (exp.paid_by !== m.id) return sum;
+                            return exp.expense_type === 'income' ? sum - amt : sum + amt;
+                          }, 0);
+                          return (
+                            <MGroup key={m.id} justify="space-between" mt={2}>
+                              <Text size="xs" c="dimmed" style={{ flex: 1 }}>{m.name}</Text>
+                              <Text size="xs" fw={600} c={memberTotal >= 0 ? 'teal' : 'red'} w={80} ta="right">{fmtAmt(memberTotal, group.currency)}</Text>
+                              <Text size="xs" fw={600} w={80} ta="right">{fmtAmt(paid, group.currency)}</Text>
+                            </MGroup>
+                          );
+                        })}
                       </Collapse>
                     </Paper>
                   </>
