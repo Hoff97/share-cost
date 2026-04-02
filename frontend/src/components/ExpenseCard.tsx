@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Text, Card, Badge, Collapse, Divider, Stack,
   Group as MGroup, SegmentedControl, TextInput, NumberInput, Select,
-  Checkbox, Slider, ActionIcon,
+  Checkbox, Slider, ActionIcon, Tooltip,
   Button, Modal,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
@@ -228,8 +228,10 @@ export function ExpenseCard({
       )}
       {isEditing ? (
         <Stack gap="sm">
+          <MGroup gap={4} align="center">
           <SegmentedControl
             fullWidth
+            style={{ flex: 1 }}
             value={editExpenseType}
             onChange={(val) => {
               setEditExpenseType(val);
@@ -242,6 +244,12 @@ export function ExpenseCard({
               { label: t('income'), value: 'income' },
             ]}
           />
+          <Tooltip label={t('expenseTypeHelp')} multiline w={260} withArrow>
+            <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
+              <Text size="xs">?</Text>
+            </ActionIcon>
+          </Tooltip>
+          </MGroup>
           <TextInput
             placeholder={t('description')}
             value={editDescription}
@@ -325,7 +333,14 @@ export function ExpenseCard({
               </Stack>
               {editSplitBetween.length > 0 && (
                 <>
-                  <Text size="sm" fw={500} mt="sm" mb={4}>{t('splitMethod')}</Text>
+                  <MGroup gap={4} align="center">
+                    <Text size="sm" fw={500}>{t('splitMethod')}</Text>
+                    <Tooltip label={t('splitMethodHelp')} multiline w={260} withArrow>
+                      <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
+                        <Text size="xs">?</Text>
+                      </ActionIcon>
+                    </Tooltip>
+                  </MGroup>
                   <SegmentedControl
                     fullWidth
                     size="xs"

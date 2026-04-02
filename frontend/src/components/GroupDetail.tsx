@@ -756,10 +756,12 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
           <Modal opened={addEntryOpened} onClose={closeAddEntry} title={t('addEntry')} centered size="md">
               <form onSubmit={(e) => { handleAddExpense(e); closeAddEntry(); }}>
                 <Stack gap="sm">
-                  <SegmentedControl
-                    fullWidth
-                    value={expenseType}
-                    onChange={(val) => {
+                  <MGroup gap={4} align="center">
+                    <SegmentedControl
+                      fullWidth
+                      style={{ flex: 1 }}
+                      value={expenseType}
+                      onChange={(val) => {
                       setExpenseType(val);
                       if (val === 'transfer') {
                         setSplitBetween([]);
@@ -774,6 +776,12 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       { label: t('income'), value: 'income' },
                     ]}
                   />
+                  <Tooltip label={t('expenseTypeHelp')} multiline w={260} withArrow>
+                    <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
+                      <Text size="xs">?</Text>
+                    </ActionIcon>
+                  </Tooltip>
+                  </MGroup>
                   <TextInput
                     placeholder={t('description')}
                     value={description}
@@ -857,7 +865,14 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       </Stack>
                       {splitBetween.length > 0 && (
                         <>
-                          <Text size="sm" fw={500} mt="sm" mb={4}>{t('splitMethod')}</Text>
+                          <MGroup gap={4} align="center">
+                            <Text size="sm" fw={500}>{t('splitMethod')}</Text>
+                            <Tooltip label={t('splitMethodHelp')} multiline w={260} withArrow>
+                              <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
+                                <Text size="xs">?</Text>
+                              </ActionIcon>
+                            </Tooltip>
+                          </MGroup>
                           <SegmentedControl
                             fullWidth
                             size="xs"

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge, CloseButton, ActionIcon, useMantineColorScheme, useComputedColorScheme, Select } from '@mantine/core';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Container, Title, Text, Button, Stack, Paper, Loader, Center, Group as MGroup, Alert, Badge, CloseButton, ActionIcon, useMantineColorScheme, useComputedColorScheme, Select, Modal, Tooltip } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
 import { useQueryState, parseAsString } from 'nuqs';
 import { LANGUAGES } from './i18n';
@@ -11,6 +11,7 @@ import { GroupList } from './components/GroupList';
 import type { StoredGroup } from './storage';
 import { getStoredGroups, saveGroup, removeGroup, setSelectedMember, getStoredGroup } from './storage';
 import { SyncProvider, useSync } from './sync';
+import { getPendingMutations, removeMutation, type QueuedMutation } from './offlineDb';
 
 // Extract token from URL hash (used for old-style share links)
 const getTokenFromUrl = (): string | null => {
@@ -69,19 +70,95 @@ function LanguageSelector({ i18n }: { i18n: { language: string; changeLanguage: 
 }
 
 function SyncStatus() {
-  const { isOnline, pendingCount, syncing } = useSync();
+  const { isOnline, pendingCount, syncing, refreshPending, triggerSync } = useSync();
   const { t } = useTranslation();
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [queueItems, setQueueItems] = useState<QueuedMutation[]>([]);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  const loadQueue = useCallback(async () => {
+    const items = await getPendingMutations();
+    setQueueItems(items);
+  }, []);
+
+  const openQueue = () => { loadQueue(); setQueueOpen(true); };
+
+  const handleRemove = async (id: number) => {
+    await removeMutation(id);
+    await refreshPending();
+    await loadQueue();
+    if (expandedId === id) setExpandedId(null);
+  };
+
+  const handleSync = () => {
+    triggerSync();
+    setQueueOpen(false);
+  };
+
+  const renderPayload = (item: QueuedMutation) => {
+    const p = item.payload as Record<string, unknown> | undefined;
+    if (!p) return null;
+    const rows: [string, string][] = [];
+    if (p.description) rows.push([t('description'), String(p.description)]);
+    if (p.amount != null) rows.push([t('amount'), String(p.amount)]);
+    if (p.expenseType) rows.push([t('expenseType'), t(String(p.expenseType))]);
+    if (p.splitType) rows.push([t('splitMethod'), t(String(p.splitType))]);
+    if (p.name) rows.push([t('memberName'), String(p.name)]);
+    if (p.expenseId) rows.push(['ID', String(p.expenseId).slice(0, 12)]);
+    if (p.expenseDate) rows.push([t('date'), String(p.expenseDate)]);
+    if (rows.length === 0) return <Text size="xs" c="dimmed" mt={4}>{JSON.stringify(p).slice(0, 120)}</Text>;
+    return (
+      <Stack gap={2} mt={4}>
+        {rows.map(([label, val]) => (
+          <MGroup key={label} gap={4}>
+            <Text size="xs" c="dimmed" fw={500}>{label}:</Text>
+            <Text size="xs">{val}</Text>
+          </MGroup>
+        ))}
+      </Stack>
+    );
+  };
+
   if (isOnline && pendingCount === 0 && !syncing) return null;
   return (
-    <div style={{ position: 'fixed', bottom: 16, right: 16, display: 'flex', gap: 8, zIndex: 1000 }}>
-      {!isOnline && <Badge color="orange" size="lg" variant="filled">{t('offline')}</Badge>}
-      {syncing && <Badge color="blue" size="lg" variant="filled">{t('syncing')}</Badge>}
-      {!syncing && pendingCount > 0 && (
-        <Badge color="yellow" size="lg" variant="filled">
-          {t('pending_count', { count: pendingCount })}
-        </Badge>
-      )}
-    </div>
+    <>
+      <div style={{ position: 'fixed', bottom: 16, right: 16, display: 'flex', gap: 8, zIndex: 1000 }}>
+        {!isOnline && <Badge color="orange" size="lg" variant="filled">{t('offline')}</Badge>}
+        {syncing && <Badge color="blue" size="lg" variant="filled">{t('syncing')}</Badge>}
+        {!syncing && pendingCount > 0 && (
+          <Badge color="yellow" size="lg" variant="filled" style={{ cursor: 'pointer' }} onClick={openQueue}>
+            {t('pending_count', { count: pendingCount })}
+          </Badge>
+        )}
+      </div>
+      <Modal opened={queueOpen} onClose={() => setQueueOpen(false)} title={t('syncQueue')} centered size="md">
+        <Stack gap="xs">
+          {queueItems.length === 0 ? (
+            <Text c="dimmed" ta="center" py="md">{t('syncQueueEmpty')}</Text>
+          ) : (
+            queueItems.map(item => (
+              <Paper key={item.id} p="xs" radius="sm" withBorder
+                style={{ cursor: 'pointer' }}
+                onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
+                <MGroup justify="space-between" wrap="nowrap">
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <Text size="sm" fw={500}>{t(`syncAction_${item.action}`, { defaultValue: item.action })}</Text>
+                    <Text size="xs" c="dimmed" truncate>{new Date(item.timestamp).toLocaleString()}</Text>
+                    {expandedId === item.id && renderPayload(item)}
+                  </div>
+                  <Tooltip label={t('removeFromQueue')}>
+                    <CloseButton size="sm" onClick={(e) => { e.stopPropagation(); handleRemove(item.id); }} />
+                  </Tooltip>
+                </MGroup>
+              </Paper>
+            ))
+          )}
+          {isOnline && queueItems.length > 0 && (
+            <Button fullWidth onClick={handleSync}>{t('syncNow')}</Button>
+          )}
+        </Stack>
+      </Modal>
+    </>
   );
 }
 
