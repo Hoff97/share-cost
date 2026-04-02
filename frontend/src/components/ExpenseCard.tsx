@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Text, Card, Badge, Collapse, Divider, Stack,
   Group as MGroup, SegmentedControl, TextInput, NumberInput, Select,
-  Checkbox, Slider,
+  Checkbox, Slider, ActionIcon,
   Button, Modal,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
@@ -135,6 +135,9 @@ export function ExpenseCard({
     if (editSplitType === 'exact') {
       const total = editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0);
       return Math.abs(total - editAmountNum) < 0.01;
+    }
+    if (editSplitType === 'shares') {
+      return editSplitBetween.some(id => (editSplitShares[id] ?? 0) > 0);
     }
     return true;
   })();
@@ -330,18 +333,22 @@ export function ExpenseCard({
                       if (val !== 'equal' && editSplitBetween.length > 0) {
                         const n = editSplitBetween.length;
                         const totalAmt = typeof editAmount === 'number' ? editAmount : parseFloat(editAmount as string) || 0;
-                        const hasValues = prev !== 'equal' && Object.keys(editSplitShares).length > 0;
-                        if (hasValues && totalAmt > 0) {
-                          if (prev === 'percentage' && val === 'exact') {
-                            setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, Math.round((editSplitShares[id] ?? 0) / 100 * totalAmt * 100) / 100])));
-                          } else if (prev === 'exact' && val === 'percentage') {
-                            setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, Math.round((editSplitShares[id] ?? 0) / totalAmt * 10000) / 100])));
-                          }
+                        if (val === 'shares') {
+                          setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, 10])));
                         } else {
-                          const equalShare = val === 'percentage'
-                            ? Math.round(10000 / n) / 100
-                            : Math.round(totalAmt / n * 100) / 100;
-                          setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, equalShare])));
+                          const hasValues = prev !== 'equal' && prev !== 'shares' && Object.keys(editSplitShares).length > 0;
+                          if (hasValues && totalAmt > 0) {
+                            if (prev === 'percentage' && val === 'exact') {
+                              setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, Math.round((editSplitShares[id] ?? 0) / 100 * totalAmt * 100) / 100])));
+                            } else if (prev === 'exact' && val === 'percentage') {
+                              setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, Math.round((editSplitShares[id] ?? 0) / totalAmt * 10000) / 100])));
+                            }
+                          } else {
+                            const equalShare = val === 'percentage'
+                              ? Math.round(10000 / n) / 100
+                              : Math.round(totalAmt / n * 100) / 100;
+                            setEditSplitShares(Object.fromEntries(editSplitBetween.map(id => [id, equalShare])));
+                          }
                         }
                       }
                     }}
@@ -349,24 +356,42 @@ export function ExpenseCard({
                       { label: t('equal'), value: 'equal' },
                       { label: t('percentage'), value: 'percentage' },
                       { label: t('exact'), value: 'exact' },
+                      { label: t('shares'), value: 'shares' },
                     ]}
                   />
                   {editSplitType !== 'equal' && (
                     <Stack gap={4} mt="xs">
-                      {editSplitBetween.map(id => (
+                      {editSplitBetween.map(id => {
+                        const totalSharesVal = editSplitType === 'shares' ? editSplitBetween.reduce((s, mid) => s + (editSplitShares[mid] ?? 0), 0) : 0;
+                        const totalAmt = typeof editAmount === 'number' ? editAmount : parseFloat(editAmount as string) || 0;
+                        const equivAmt = totalSharesVal > 0 ? totalAmt * (editSplitShares[id] ?? 0) / totalSharesVal : 0;
+                        return (
                         <Stack key={id} gap={2}>
                           <MGroup gap="xs" align="center">
                             <Text size="sm" style={{ flex: 1 }}>{getMemberName(id)}</Text>
+                            {editSplitType === 'shares' && (
+                              <ActionIcon size="xs" variant="light" onClick={() => setEditSplitShares(prev => ({ ...prev, [id]: Math.max(0, (prev[id] ?? 0) - 1) }))}>
+                                <Text size="xs" fw={700}>−</Text>
+                              </ActionIcon>
+                            )}
                             <NumberInput
                               size="xs"
-                              w={100}
+                              w={editSplitType === 'shares' ? 60 : 100}
                               min={0}
-                              step={editSplitType === 'percentage' ? 1 : 0.01}
-                              decimalScale={2}
+                              step={editSplitType === 'shares' ? 1 : editSplitType === 'percentage' ? 1 : 0.01}
+                              decimalScale={editSplitType === 'shares' ? 0 : 2}
                               value={editSplitShares[id] ?? ''}
                               onChange={(val) => setEditSplitShares(prev => ({ ...prev, [id]: typeof val === 'string' ? parseFloat(val) || 0 : val }))}
-                              rightSection={editSplitType === 'percentage' ? <Text size="xs">%</Text> : <Text size="xs">{cs(editExpenseCurrency)}</Text>}
+                              rightSection={editSplitType === 'percentage' ? <Text size="xs">%</Text> : editSplitType === 'shares' ? <Text size="xs">×</Text> : <Text size="xs">{cs(editExpenseCurrency)}</Text>}
                             />
+                            {editSplitType === 'shares' && (
+                              <ActionIcon size="xs" variant="light" onClick={() => setEditSplitShares(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))}>
+                                <Text size="xs" fw={700}>+</Text>
+                              </ActionIcon>
+                            )}
+                            {editSplitType === 'shares' && (
+                              <Text size="xs" c="dimmed" w={70} ta="right">{fmtAmt(equivAmt, editExpenseCurrency)}</Text>
+                            )}
                           </MGroup>
                           {editSplitType === 'percentage' && (() => {
                             const target = Math.max(0, Math.min(100, 100 - editSplitBetween.filter(o => o !== id).reduce((s, o) => s + (editSplitShares[o] ?? 0), 0)));
@@ -396,15 +421,22 @@ export function ExpenseCard({
                             />;
                           })()}
                         </Stack>
-                      ))}
-                      <Text size="xs" mt="md" c={
-                        editSplitType === 'percentage'
-                          ? Math.abs(editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0) - 100) < 0.01 ? 'green' : 'red'
-                          : Math.abs(editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0) - (typeof editAmount === 'number' ? editAmount : parseFloat(editAmount as string) || 0)) < 0.01 ? 'green' : 'red'
-                      }>
-                        Total: {editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0).toFixed(2)}
-                        {editSplitType === 'percentage' ? '% / 100%' : ` / ${typeof editAmount === 'number' ? editAmount.toFixed(2) : parseFloat(editAmount as string)?.toFixed(2) || '0.00'} ${cs(editExpenseCurrency)}`}
-                      </Text>
+                      );
+                      })}
+                      {editSplitType === 'shares' ? (
+                        <Text size="xs" mt="md" c="dimmed">
+                          {t('totalShares')}: {editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0)}
+                        </Text>
+                      ) : (
+                        <Text size="xs" mt="md" c={
+                          editSplitType === 'percentage'
+                            ? Math.abs(editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0) - 100) < 0.01 ? 'green' : 'red'
+                            : Math.abs(editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0) - (typeof editAmount === 'number' ? editAmount : parseFloat(editAmount as string) || 0)) < 0.01 ? 'green' : 'red'
+                        }>
+                          Total: {editSplitBetween.reduce((s, id) => s + (editSplitShares[id] ?? 0), 0).toFixed(2)}
+                          {editSplitType === 'percentage' ? '% / 100%' : ` / ${typeof editAmount === 'number' ? editAmount.toFixed(2) : parseFloat(editAmount as string)?.toFixed(2) || '0.00'} ${cs(editExpenseCurrency)}`}
+                        </Text>
+                      )}
                     </Stack>
                   )}
                 </>
@@ -491,7 +523,7 @@ export function ExpenseCard({
                 <Text size="sm" fw={500} c="dimmed">
                   {expense.expense_type === 'income' ? t('receivedByName', { name: getMemberName(expense.paid_by) }) : t('paidBy', { name: getMemberName(expense.paid_by) })}
                   {expense.split_type && expense.split_type !== 'equal' && (
-                    <Text component="span" size="xs" c="dimmed"> · {expense.split_type === 'percentage' ? t('percentSplit') : t('exactSplit')}</Text>
+                    <Text component="span" size="xs" c="dimmed"> · {expense.split_type === 'percentage' ? t('percentSplit') : expense.split_type === 'shares' ? t('sharesSplit') : t('exactSplit')}</Text>
                   )}
                   {expense.currency !== groupCurrency && (
                     <Text component="span" size="xs" c="dimmed"> · {t('rateInfo', { from: expense.currency, rate: expense.exchange_rate.toFixed(4), to: groupCurrency })}</Text>
@@ -504,6 +536,9 @@ export function ExpenseCard({
                     share = expense.amount * splitEntry.share / 100;
                   } else if (expense.split_type === 'exact' && splitEntry?.share != null) {
                     share = splitEntry.share;
+                  } else if (expense.split_type === 'shares' && splitEntry?.share != null && expense.splits) {
+                    const totalShares = expense.splits.reduce((s, e) => s + (e.share ?? 0), 0);
+                    share = totalShares > 0 ? expense.amount * splitEntry.share / totalShares : 0;
                   } else {
                     share = expense.amount / expense.split_between.length;
                   }
@@ -514,6 +549,9 @@ export function ExpenseCard({
                         {getMemberName(memberId)}
                         {expense.split_type === 'percentage' && splitEntry?.share != null && (
                           <Text component="span" size="xs" c="dimmed"> ({splitEntry.share}%)</Text>
+                        )}
+                        {expense.split_type === 'shares' && splitEntry?.share != null && (
+                          <Text component="span" size="xs" c="dimmed"> ({splitEntry.share}×)</Text>
                         )}
                       </Text>
                       <MGroup gap={4}>
@@ -561,6 +599,9 @@ export function ExpenseCard({
                     share = expense.amount * splitEntry.share / 100;
                   } else if (expense.split_type === 'exact' && splitEntry?.share != null) {
                     share = splitEntry.share;
+                  } else if (expense.split_type === 'shares' && splitEntry?.share != null && expense.splits) {
+                    const totalShares = expense.splits.reduce((s, e) => s + (e.share ?? 0), 0);
+                    share = totalShares > 0 ? expense.amount * splitEntry.share / totalShares : 0;
                   } else {
                     share = expense.amount / expense.split_between.length;
                   }

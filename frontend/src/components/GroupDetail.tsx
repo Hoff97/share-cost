@@ -181,6 +181,9 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       const total = splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0);
       return Math.abs(total - addAmountNum) < 0.01;
     }
+    if (splitType === 'shares') {
+      return splitBetween.some(id => (splitShares[id] ?? 0) > 0);
+    }
     return true;
   })();
 
@@ -201,7 +204,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       expenseCurrency,
       exchangeRate,
       splitType,
-      splitType !== 'equal'
+      (splitType !== 'equal')
         ? splitBetween.map(id => ({ member_id: id, share: splitShares[id] ?? 0 }))
         : undefined,
     );
@@ -865,20 +868,25 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                               if (val !== 'equal' && splitBetween.length > 0) {
                                 const n = splitBetween.length;
                                 const totalAmt = typeof amount === 'number' ? amount : parseFloat(amount as string) || 0;
-                                const hasValues = prev !== 'equal' && Object.keys(splitShares).length > 0;
-                                if (hasValues && totalAmt > 0) {
-                                  // Convert existing values between percentage <-> exact
-                                  if (prev === 'percentage' && val === 'exact') {
-                                    setSplitShares(Object.fromEntries(splitBetween.map(id => [id, Math.round((splitShares[id] ?? 0) / 100 * totalAmt * 100) / 100])));
-                                  } else if (prev === 'exact' && val === 'percentage') {
-                                    setSplitShares(Object.fromEntries(splitBetween.map(id => [id, Math.round((splitShares[id] ?? 0) / totalAmt * 10000) / 100])));
-                                  }
+                                if (val === 'shares') {
+                                  // Always prefill with default 10 shares each
+                                  setSplitShares(Object.fromEntries(splitBetween.map(id => [id, 10])));
                                 } else {
-                                  // First time switching from equal — prefill with equal split
-                                  const equalShare = val === 'percentage'
-                                    ? Math.round(10000 / n) / 100
-                                    : Math.round(totalAmt / n * 100) / 100;
-                                  setSplitShares(Object.fromEntries(splitBetween.map(id => [id, equalShare])));
+                                  const hasValues = prev !== 'equal' && prev !== 'shares' && Object.keys(splitShares).length > 0;
+                                  if (hasValues && totalAmt > 0) {
+                                    // Convert existing values between percentage <-> exact
+                                    if (prev === 'percentage' && val === 'exact') {
+                                      setSplitShares(Object.fromEntries(splitBetween.map(id => [id, Math.round((splitShares[id] ?? 0) / 100 * totalAmt * 100) / 100])));
+                                    } else if (prev === 'exact' && val === 'percentage') {
+                                      setSplitShares(Object.fromEntries(splitBetween.map(id => [id, Math.round((splitShares[id] ?? 0) / totalAmt * 10000) / 100])));
+                                    }
+                                  } else {
+                                    // First time switching from equal/shares — prefill with equal split
+                                    const equalShare = val === 'percentage'
+                                      ? Math.round(10000 / n) / 100
+                                      : Math.round(totalAmt / n * 100) / 100;
+                                    setSplitShares(Object.fromEntries(splitBetween.map(id => [id, equalShare])));
+                                  }
                                 }
                               }
                             }}
@@ -886,24 +894,42 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                               { label: t('equal'), value: 'equal' },
                               { label: t('percentage'), value: 'percentage' },
                               { label: t('exact'), value: 'exact' },
+                              { label: t('shares'), value: 'shares' },
                             ]}
                           />
                           {splitType !== 'equal' && (
                             <Stack gap={4} mt="xs">
-                              {splitBetween.map(id => (
+                              {splitBetween.map(id => {
+                                const totalSharesVal = splitType === 'shares' ? splitBetween.reduce((s, mid) => s + (splitShares[mid] ?? 0), 0) : 0;
+                                const totalAmt = typeof amount === 'number' ? amount : parseFloat(amount as string) || 0;
+                                const equivAmt = totalSharesVal > 0 ? totalAmt * (splitShares[id] ?? 0) / totalSharesVal : 0;
+                                return (
                                 <Stack key={id} gap={2}>
                                   <MGroup gap="xs" align="center">
                                     <Text size="sm" style={{ flex: 1 }}>{getMemberName(id)}</Text>
+                                    {splitType === 'shares' && (
+                                      <ActionIcon size="xs" variant="light" onClick={() => setSplitShares(prev => ({ ...prev, [id]: Math.max(0, (prev[id] ?? 0) - 1) }))}>
+                                        <Text size="xs" fw={700}>−</Text>
+                                      </ActionIcon>
+                                    )}
                                     <NumberInput
                                       size="xs"
-                                      w={100}
+                                      w={splitType === 'shares' ? 60 : 100}
                                       min={0}
-                                      step={splitType === 'percentage' ? 1 : 0.01}
-                                      decimalScale={2}
+                                      step={splitType === 'shares' ? 1 : splitType === 'percentage' ? 1 : 0.01}
+                                      decimalScale={splitType === 'shares' ? 0 : 2}
                                       value={splitShares[id] ?? ''}
                                       onChange={(val) => setSplitShares(prev => ({ ...prev, [id]: typeof val === 'string' ? parseFloat(val) || 0 : val }))}
-                                      rightSection={splitType === 'percentage' ? <Text size="xs">%</Text> : <Text size="xs">{cs(expenseCurrency)}</Text>}
+                                      rightSection={splitType === 'percentage' ? <Text size="xs">%</Text> : splitType === 'shares' ? <Text size="xs">×</Text> : <Text size="xs">{cs(expenseCurrency)}</Text>}
                                     />
+                                    {splitType === 'shares' && (
+                                      <ActionIcon size="xs" variant="light" onClick={() => setSplitShares(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))}>
+                                        <Text size="xs" fw={700}>+</Text>
+                                      </ActionIcon>
+                                    )}
+                                    {splitType === 'shares' && (
+                                      <Text size="xs" c="dimmed" w={70} ta="right">{fmtAmt(equivAmt, expenseCurrency)}</Text>
+                                    )}
                                   </MGroup>
                                   {splitType === 'percentage' && (() => {
                                     const target = Math.max(0, Math.min(100, 100 - splitBetween.filter(o => o !== id).reduce((s, o) => s + (splitShares[o] ?? 0), 0)));
@@ -933,15 +959,22 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                                     />;
                                   })()}
                                 </Stack>
-                              ))}
-                              <Text size="xs" mt="md" c={
-                                splitType === 'percentage'
-                                  ? Math.abs(splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0) - 100) < 0.01 ? 'green' : 'red'
-                                  : Math.abs(splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0) - (typeof amount === 'number' ? amount : parseFloat(amount as string) || 0)) < 0.01 ? 'green' : 'red'
-                              }>
-                                Total: {splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0).toFixed(2)}
-                                {splitType === 'percentage' ? '% / 100%' : ` / ${typeof amount === 'number' ? amount.toFixed(2) : parseFloat(amount as string)?.toFixed(2) || '0.00'} ${cs(expenseCurrency)}`}
-                              </Text>
+                              );
+                              })}
+                              {splitType === 'shares' ? (
+                                <Text size="xs" mt="md" c="dimmed">
+                                  {t('totalShares')}: {splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0)}
+                                </Text>
+                              ) : (
+                                <Text size="xs" mt="md" c={
+                                  splitType === 'percentage'
+                                    ? Math.abs(splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0) - 100) < 0.01 ? 'green' : 'red'
+                                    : Math.abs(splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0) - (typeof amount === 'number' ? amount : parseFloat(amount as string) || 0)) < 0.01 ? 'green' : 'red'
+                                }>
+                                  Total: {splitBetween.reduce((s, id) => s + (splitShares[id] ?? 0), 0).toFixed(2)}
+                                  {splitType === 'percentage' ? '% / 100%' : ` / ${typeof amount === 'number' ? amount.toFixed(2) : parseFloat(amount as string)?.toFixed(2) || '0.00'} ${cs(expenseCurrency)}`}
+                                </Text>
+                              )}
                             </Stack>
                           )}
                         </>
