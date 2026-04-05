@@ -101,10 +101,7 @@ jobs:
             cd /opt/share-cost
 
             # Write production env file
-            cat > .env <<EOF
-JWT_SECRET=${JWT_SECRET}
-OLLAMA_API_TOKEN=${OLLAMA_API_TOKEN}
-EOF
+            printf 'JWT_SECRET=%s\nOLLAMA_API_TOKEN=%s\n' "${JWT_SECRET}" "${OLLAMA_API_TOKEN}" > .env
 
             # Log in to GitHub Container Registry and pull images
             echo "${GHCR_TOKEN}" | docker login ghcr.io -u github --password-stdin
