@@ -9,24 +9,10 @@ services:
       ROCKET_PORT: "8000"
       OLLAMA_URL: ${OLLAMA_URL:-https://api.ollama.com}
       OLLAMA_API_TOKEN: ${OLLAMA_API_TOKEN:-}
-      OLLAMA_LOCAL_URL: ${OLLAMA_LOCAL_URL:-http://ollama:11434}
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     restart: unless-stopped
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: share_cost_ollama
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          memory: 4G
 
   nginx:
     image: ghcr.io/hoff97/share-cost/nginx:latest
@@ -61,4 +47,3 @@ volumes:
   postgres_data:
   letsencrypt_data:
   certbot_webroot:
-  ollama_data:

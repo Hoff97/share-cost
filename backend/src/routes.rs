@@ -1217,11 +1217,6 @@ fn ollama_url() -> String {
     std::env::var("OLLAMA_URL").unwrap_or_else(|_| "https://api.ollama.com".to_string())
 }
 
-/// Local Ollama URL for OCR. Falls back to OLLAMA_URL if not set.
-fn ollama_local_url() -> String {
-    std::env::var("OLLAMA_LOCAL_URL").unwrap_or_else(|_| ollama_url())
-}
-
 fn ollama_api_token() -> Option<String> {
     std::env::var("OLLAMA_API_TOKEN").ok().filter(|s| !s.is_empty())
 }
@@ -1249,36 +1244,6 @@ struct OllamaChatResponse {
 #[derive(Deserialize)]
 struct OllamaResponseMessage {
     content: String,
-}
-
-/// Ensure a model is available in a local Ollama instance, pulling it if necessary.
-/// Skipped when using a cloud API (i.e. when a token is provided).
-async fn ensure_model(client: &reqwest::Client, base: &str, model: &str) -> Result<(), Status> {
-    let show_resp = client
-        .post(format!("{}/api/show", base))
-        .json(&serde_json::json!({ "name": model }))
-        .send()
-        .await
-        .map_err(|_| Status::ServiceUnavailable)?;
-
-    if show_resp.status().is_success() {
-        return Ok(());
-    }
-
-    eprintln!("Pulling Ollama model: {}", model);
-    let pull_resp = client
-        .post(format!("{}/api/pull", base))
-        .json(&serde_json::json!({ "name": model, "stream": false }))
-        .send()
-        .await
-        .map_err(|_| Status::ServiceUnavailable)?;
-
-    if !pull_resp.status().is_success() {
-        eprintln!("Failed to pull model {}: {}", model, pull_resp.status());
-        return Err(Status::ServiceUnavailable);
-    }
-
-    Ok(())
 }
 
 /// Call Ollama chat endpoint.
@@ -1325,7 +1290,7 @@ async fn ollama_chat(
 }
 
 fn ocr_model() -> String {
-    std::env::var("OCR_MODEL").unwrap_or_else(|_| "glm-ocr:q8_0".to_string())
+    std::env::var("OCR_MODEL").unwrap_or_else(|_| "qwen3-vl:235b-cloud".to_string())
 }
 
 fn extract_model() -> String {
@@ -1338,11 +1303,8 @@ async fn scan_receipt(
     _rate_limit: RocketGovernor<'_, ScanRateLimit>,
     request: Json<ScanReceiptRequest>,
 ) -> Result<Json<ScanReceiptResponse>, Status> {
-    let cloud_url = ollama_url();
-    let local_url = ollama_local_url();
+    let base_url = ollama_url();
     let api_token = ollama_api_token();
-    // Use token for OCR only when using the cloud URL (no explicit OLLAMA_LOCAL_URL set)
-    let ocr_token = if std::env::var("OLLAMA_LOCAL_URL").is_ok() { None } else { api_token.clone() };
     let ocr = ocr_model();
     let extract = extract_model();
     let client = reqwest::Client::builder()
@@ -1350,22 +1312,17 @@ async fn scan_receipt(
         .build()
         .map_err(|_| Status::InternalServerError)?;
 
-    // Pull OCR model on local Ollama if needed (skip for cloud)
-    if ocr_token.is_none() {
-        ensure_model(&client, &local_url, &ocr).await?;
-    }
-
-    // Step 1: OCR — extract text from the image using a local vision model
+    // Step 1: OCR — extract text from the image using a cloud vision model
     let ocr_text = ollama_chat(
         &client,
-        &local_url,
+        &base_url,
         &ocr,
         vec![OllamaChatMessage {
             role: "user".to_string(),
             content: "Extract ALL text from this receipt image. Include every line, every number, every price. Output ONLY the raw text, nothing else.".to_string(),
             images: Some(vec![request.image.clone()]),
         }],
-        &ocr_token,
+        &api_token,
     )
     .await?;
 
@@ -1394,7 +1351,7 @@ OCR Text:
 
     let extract_result = ollama_chat(
         &client,
-        &cloud_url,
+        &base_url,
         &extract,
         vec![OllamaChatMessage {
             role: "user".to_string(),
