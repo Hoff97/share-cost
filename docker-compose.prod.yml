@@ -26,7 +26,7 @@ services:
     deploy:
       resources:
         reservations:
-          memory: 4G
+          memory: 8G
 
   nginx:
     image: ghcr.io/hoff97/share-cost/nginx:latest
