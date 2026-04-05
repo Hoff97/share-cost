@@ -1376,6 +1376,39 @@ fn extract_json_block(s: &str) -> String {
     s.trim().to_string()
 }
 
+/// Proxy exchange-rate lookups to avoid CORS issues with the Frankfurter API.
+#[get("/exchange-rate?<date>&<from>&<to>")]
+async fn exchange_rate(
+    date: &str,
+    from: &str,
+    to: &str,
+) -> Result<Json<serde_json::Value>, Status> {
+    // Basic input validation
+    if date.len() != 10 || from.len() != 3 || to.len() != 3 {
+        return Err(Status::BadRequest);
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|_| Status::InternalServerError)?;
+    let resp = client
+        .get(format!("https://api.frankfurter.app/{}?from={}&to={}", date, from, to))
+        .send()
+        .await
+        .map_err(|e| {
+            eprintln!("Frankfurter request failed: {}", e);
+            Status::ServiceUnavailable
+        })?;
+    if !resp.status().is_success() {
+        return Err(Status::ServiceUnavailable);
+    }
+    let body: serde_json::Value = resp.json().await.map_err(|e| {
+        eprintln!("Failed to parse Frankfurter response: {}", e);
+        Status::InternalServerError
+    })?;
+    Ok(Json(body))
+}
+
 pub fn get_routes() -> Vec<Route> {
     routes![
         health,
@@ -1397,6 +1430,7 @@ pub fn get_routes() -> Vec<Route> {
         rename_group,
         delete_group,
         extend_lifetime,
-        scan_receipt
+        scan_receipt,
+        exchange_rate
     ]
 }

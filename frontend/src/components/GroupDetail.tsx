@@ -48,7 +48,7 @@ const fmtAmt = (n: number, c: string) => {
 const fetchRate = async (from: string, to: string, date: string): Promise<number | null> => {
   if (from === to) return 1;
   try {
-    const res = await fetch(`https://api.frankfurter.app/${date}?from=${from}&to=${to}`);
+    const res = await fetch(`/api/exchange-rate?date=${date}&from=${from}&to=${to}`);
     if (!res.ok) return null;
     const data = await res.json();
     return data.rates?.[to] ?? null;

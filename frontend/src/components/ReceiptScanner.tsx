@@ -200,10 +200,11 @@ export function ReceiptScanner({ token, opened, onClose, onCreateSingle, onCreat
           <Text size="sm" c="dimmed" ta="center">{t('receiptCaptureHint')}</Text>
           {error && <Alert color="red" variant="light">{error}</Alert>}
 
-          <MGroup grow>
+          <Stack gap="xs">
             {/* Camera capture — native camera on mobile */}
             <Button
               variant="light"
+              fullWidth
               onClick={() => cameraInputRef.current?.click()}
             >
               📷 {t('receiptCamera')}
@@ -220,12 +221,12 @@ export function ReceiptScanner({ token, opened, onClose, onCreateSingle, onCreat
             {/* File upload */}
             <FileButton onChange={handleFile} accept="image/*">
               {(props) => (
-                <Button variant="light" ref={fileInputRef} {...props}>
+                <Button variant="light" fullWidth ref={fileInputRef} {...props}>
                   📁 {t('receiptUpload')}
                 </Button>
               )}
             </FileButton>
-          </MGroup>
+          </Stack>
         </Stack>
       )}
 

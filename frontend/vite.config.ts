@@ -41,16 +41,6 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/api\.frankfurter\.app\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'exchange-rates',
-              expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
-            },
-          },
-        ],
       },
     }),
   ],
