@@ -83,10 +83,12 @@ jobs:
           ssh -i ~/.ssh/deploy_key root@${{ secrets.HETZNER_IPV4 }} bash -s -- \
             "${{ secrets.JWT_SECRET }}" \
             "${{ secrets.GITHUB_TOKEN }}" \
+            "${{ secrets.OLLAMA_API_TOKEN }}" \
             << 'DEPLOY_SCRIPT'
             set -euo pipefail
             JWT_SECRET="$1"
             GHCR_TOKEN="$2"
+            OLLAMA_API_TOKEN="$3"
 
             # Install docker if not present
             if ! command -v docker &> /dev/null; then
@@ -99,7 +101,10 @@ jobs:
             cd /opt/share-cost
 
             # Write production env file
-            echo "JWT_SECRET=${JWT_SECRET}" > .env
+            cat > .env <<EOF
+JWT_SECRET=${JWT_SECRET}
+OLLAMA_API_TOKEN=${OLLAMA_API_TOKEN}
+EOF
 
             # Log in to GitHub Container Registry and pull images
             echo "${GHCR_TOKEN}" | docker login ghcr.io -u github --password-stdin

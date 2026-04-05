@@ -170,5 +170,21 @@
   "convertIncomeToTransfersDesc": "Diese Einnahme wird in {{count}} Überweisung(en) umgewandelt:",
   "convertTransferToIncomeDesc": "Diese Überweisung von {{from}} an {{to}} wird in eine Einnahme umgewandelt.",
   "groupExpiresSoon": "Läuft bald ab",
-  "groupExpiresSoonDesc": "Diese Gruppe wird wegen Inaktivität gelöscht. Klicken, um sie zu behalten."
+  "groupExpiresSoonDesc": "Diese Gruppe wird wegen Inaktivität gelöscht. Klicken, um sie zu behalten.",
+  "scanReceipt": "Beleg scannen",
+  "receiptCaptureHint": "Fotografiere einen Beleg oder lade ein Bild hoch",
+  "receiptCamera": "Kamera",
+  "receiptUpload": "Bild hochladen",
+  "receiptScanning": "Beleg wird analysiert…",
+  "receiptScanFailed": "Beleg konnte nicht gelesen werden. Bitte erneut versuchen.",
+  "receiptItems": "Positionen",
+  "receiptItem": "Position",
+  "receiptCreateSingle": "Einzelne Ausgabe erstellen",
+  "receiptCreatePerItem": "Pro Position erstellen",
+  "receiptRetry": "Erneut versuchen",
+  "receiptPrev": "Zurück",
+  "receiptNext": "Weiter",
+  "receiptRemoveItem": "Position entfernen",
+  "receiptConfirmAll": "Alle bestätigen",
+  "receiptBackToReview": "Zurück zur Übersicht"
 }

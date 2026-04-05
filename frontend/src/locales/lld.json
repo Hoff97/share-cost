@@ -169,5 +169,21 @@
   "convertIncomeToTransfersDesc": "Chësta entrada vën cuertida te {{count}} trasferimënt(s):",
   "convertTransferToIncomeDesc": "Chësc trasferimënt da {{from}} a {{to}} vën cuertì te na entrada.",
   "groupExpiresSoon": "Scëda prëst",
-  "groupExpiresSoonDesc": "Chësc grupp vën scancelé per inativité. Tuchëde per l tenì."
+  "groupExpiresSoonDesc": "Chësc grupp vën scancelé per inativité. Tuchëde per l tenì.",
+  "scanReceipt": "Scanè la recevuda",
+  "receiptCaptureHint": "Fà na foto dla recevuda o ciàrica na imàgine",
+  "receiptCamera": "Fotocàmera",
+  "receiptUpload": "Ciàrica imàgine",
+  "receiptScanning": "Analisa dla recevuda…",
+  "receiptScanFailed": "N'é nia stè poscibil lieje la recevuda. Prova inò.",
+  "receiptItems": "Artìcoi",
+  "receiptItem": "Artìcol",
+  "receiptCreateSingle": "Fà na spesa sola",
+  "receiptCreatePerItem": "Fà per artìcol",
+  "receiptRetry": "Prova inò",
+  "receiptPrev": "Dant",
+  "receiptNext": "Dedò",
+  "receiptRemoveItem": "Tò via l'artìcol",
+  "receiptConfirmAll": "Confermè duc",
+  "receiptBackToReview": "Torna ala prevista"
 }

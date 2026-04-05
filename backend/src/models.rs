@@ -245,3 +245,34 @@ impl From<MemberRow> for Member {
         }
     }
 }
+
+/// Request to scan a receipt image.
+#[derive(Debug, Deserialize)]
+pub struct ScanReceiptRequest {
+    /// Base64-encoded image data (JPEG or PNG)
+    pub image: String,
+    /// Target language code for the extracted title (e.g. "en", "de", "fr")
+    pub language: String,
+}
+
+/// A single line item extracted from a receipt.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReceiptItem {
+    pub description: String,
+    pub amount: f64,
+}
+
+/// Response from receipt scanning.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScanReceiptResponse {
+    /// Descriptive title for the whole receipt
+    pub title: String,
+    /// Total amount on the receipt
+    pub total: f64,
+    /// Date on the receipt (YYYY-MM-DD) if found
+    pub date: Option<String>,
+    /// ISO 4217 currency code detected from the receipt (e.g. "EUR", "USD")
+    pub currency: Option<String>,
+    /// Individual line items
+    pub items: Vec<ReceiptItem>,
+}

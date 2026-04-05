@@ -5,6 +5,7 @@ use rand::Rng;
 use rocket::Route;
 use rocket::http::Status;
 use rocket::serde::json::Json;
+use serde::{Deserialize, Serialize};
 use sqlx;
 use uuid::Uuid;
 
@@ -1190,6 +1191,230 @@ async fn extend_lifetime(auth: GroupAuth) -> Result<Status, Status> {
     Ok(Status::NoContent)
 }
 
+// ---------- Receipt scanning via Ollama ----------
+
+fn ollama_url() -> String {
+    std::env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string())
+}
+
+fn ollama_api_token() -> Option<String> {
+    std::env::var("OLLAMA_API_TOKEN").ok().filter(|s| !s.is_empty())
+}
+
+#[derive(Serialize)]
+struct OllamaChatRequest {
+    model: String,
+    messages: Vec<OllamaChatMessage>,
+    stream: bool,
+}
+
+#[derive(Serialize)]
+struct OllamaChatMessage {
+    role: String,
+    content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    images: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+struct OllamaChatResponse {
+    message: OllamaResponseMessage,
+}
+
+#[derive(Deserialize)]
+struct OllamaResponseMessage {
+    content: String,
+}
+
+/// Ensure a model is available in Ollama, pulling it if necessary.
+async fn ensure_model(client: &reqwest::Client, base: &str, model: &str, token: &Option<String>) -> Result<(), Status> {
+    // Check if model exists via /api/show
+    let mut show_req = client
+        .post(format!("{}/api/show", base))
+        .json(&serde_json::json!({ "name": model }));
+    if let Some(t) = token {
+        show_req = show_req.bearer_auth(t);
+    }
+    let show_resp = show_req
+        .send()
+        .await
+        .map_err(|_| Status::ServiceUnavailable)?;
+
+    if show_resp.status().is_success() {
+        return Ok(());
+    }
+
+    // Pull the model
+    eprintln!("Pulling Ollama model: {}", model);
+    let mut pull_req = client
+        .post(format!("{}/api/pull", base))
+        .json(&serde_json::json!({ "name": model, "stream": false }));
+    if let Some(t) = token {
+        pull_req = pull_req.bearer_auth(t);
+    }
+    let pull_resp = pull_req
+        .send()
+        .await
+        .map_err(|_| Status::ServiceUnavailable)?;
+
+    if !pull_resp.status().is_success() {
+        eprintln!("Failed to pull model {}: {}", model, pull_resp.status());
+        return Err(Status::ServiceUnavailable);
+    }
+
+    Ok(())
+}
+
+/// Call Ollama chat endpoint.
+async fn ollama_chat(
+    client: &reqwest::Client,
+    base: &str,
+    model: &str,
+    messages: Vec<OllamaChatMessage>,
+    token: &Option<String>,
+) -> Result<String, Status> {
+    let req = OllamaChatRequest {
+        model: model.to_string(),
+        messages,
+        stream: false,
+    };
+
+    let mut http_req = client
+        .post(format!("{}/api/chat", base))
+        .json(&req);
+    if let Some(t) = token {
+        http_req = http_req.bearer_auth(t);
+    }
+    let resp = http_req
+        .send()
+        .await
+        .map_err(|e| {
+            eprintln!("Ollama request failed: {}", e);
+            Status::ServiceUnavailable
+        })?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        eprintln!("Ollama returned {}: {}", status, body);
+        return Err(Status::ServiceUnavailable);
+    }
+
+    let chat_resp: OllamaChatResponse = resp.json().await.map_err(|e| {
+        eprintln!("Failed to parse Ollama response: {}", e);
+        Status::InternalServerError
+    })?;
+
+    Ok(chat_resp.message.content)
+}
+
+const OCR_MODEL: &str = "glm-ocr:q8_0";
+const EXTRACT_MODEL: &str = "gemma4:e2b";
+
+#[post("/receipt/scan", data = "<request>")]
+async fn scan_receipt(
+    _auth: GroupAuth,
+    request: Json<ScanReceiptRequest>,
+) -> Result<Json<ScanReceiptResponse>, Status> {
+    let base = ollama_url();
+    let api_token = ollama_api_token();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|_| Status::InternalServerError)?;
+
+    // Ensure both models are available
+    ensure_model(&client, &base, OCR_MODEL, &api_token).await?;
+    ensure_model(&client, &base, EXTRACT_MODEL, &api_token).await?;
+
+    // Step 1: OCR — extract text from the image using the vision model
+    let ocr_text = ollama_chat(
+        &client,
+        &base,
+        OCR_MODEL,
+        vec![OllamaChatMessage {
+            role: "user".to_string(),
+            content: "Extract ALL text from this receipt image. Include every line, every number, every price. Output ONLY the raw text, nothing else.".to_string(),
+            images: Some(vec![request.image.clone()]),
+        }],
+        &api_token,
+    )
+    .await?;
+
+    // Step 2: Extract structured data using the language model
+    let lang = &request.language;
+    let extract_prompt = format!(
+        r#"You are a receipt parser. Given the OCR text of a receipt below, extract structured data as JSON.
+
+IMPORTANT:
+- The "title" field must be a short descriptive name for the purchase in {lang} language (e.g. "Grocery shopping" or "Restaurant dinner"). Translate if needed.
+- The "total" field must be the final total amount paid (look for "Total", "Summe", "Totale", etc.). Use the final/grand total, not subtotals.
+- The "date" field must be in YYYY-MM-DD format if you can find a date, or null if not found.
+- The "currency" field must be the ISO 4217 currency code (e.g. "EUR", "USD", "GBP", "CHF"). Detect it from currency symbols (€, $, £), text, or locale of the receipt. Use null if uncertain.
+- The "items" array should contain each individual line item with "description" (in the original language of the receipt) and "amount" (as a number).
+- If you cannot determine the total, sum up the item amounts.
+- Output ONLY valid JSON, no markdown, no explanation.
+
+Expected format:
+{{"title": "...", "total": 12.34, "date": "2024-01-15", "currency": "EUR", "items": [{{"description": "...", "amount": 1.23}}]}}
+
+OCR Text:
+{ocr_text}"#,
+        lang = lang,
+        ocr_text = ocr_text
+    );
+
+    let extract_result = ollama_chat(
+        &client,
+        &base,
+        EXTRACT_MODEL,
+        vec![OllamaChatMessage {
+            role: "user".to_string(),
+            content: extract_prompt,
+            images: None,
+        }],
+        &api_token,
+    )
+    .await?;
+
+    // Parse the JSON response — try to extract JSON from the response
+    let json_str = extract_json_block(&extract_result);
+    let parsed: ScanReceiptResponse = serde_json::from_str(&json_str).map_err(|e| {
+        eprintln!(
+            "Failed to parse receipt extraction JSON: {}\nRaw response: {}",
+            e, extract_result
+        );
+        Status::UnprocessableEntity
+    })?;
+
+    Ok(Json(parsed))
+}
+
+/// Try to extract a JSON object from a string that might contain markdown fences or extra text.
+fn extract_json_block(s: &str) -> String {
+    // Try to find ```json ... ``` block first
+    if let Some(start) = s.find("```json") {
+        let after = &s[start + 7..];
+        if let Some(end) = after.find("```") {
+            return after[..end].trim().to_string();
+        }
+    }
+    // Try to find ``` ... ``` block
+    if let Some(start) = s.find("```") {
+        let after = &s[start + 3..];
+        if let Some(end) = after.find("```") {
+            return after[..end].trim().to_string();
+        }
+    }
+    // Try to find first { ... last }
+    if let Some(start) = s.find('{') {
+        if let Some(end) = s.rfind('}') {
+            return s[start..=end].to_string();
+        }
+    }
+    s.trim().to_string()
+}
+
 pub fn get_routes() -> Vec<Route> {
     routes![
         health,
@@ -1210,6 +1435,7 @@ pub fn get_routes() -> Vec<Route> {
         merge_token,
         rename_group,
         delete_group,
-        extend_lifetime
+        extend_lifetime,
+        scan_receipt
     ]
 }

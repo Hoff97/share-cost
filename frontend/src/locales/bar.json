@@ -170,5 +170,21 @@
   "convertIncomeToTransfersDesc": "De Einnahm wead in {{count}} Überweisung(en) umgwandlt:",
   "convertTransferToIncomeDesc": "De Überweisung vo {{from}} an {{to}} wead in a Einnahm umgwandlt.",
   "groupExpiresSoon": "Laaft boid ab",
-  "groupExpiresSoonDesc": "De Gruppn wead weng Inaktivität glöscht. Klick, um se z'behoidn."
+  "groupExpiresSoonDesc": "De Gruppn wead weng Inaktivität glöscht. Klick, um se z'behoidn.",
+  "scanReceipt": "Kassazettel scanna",
+  "receiptCaptureHint": "Mach a Foto vom Kassazettel oder lad a Büd hoch",
+  "receiptCamera": "Kamera",
+  "receiptUpload": "Büd hochladn",
+  "receiptScanning": "Kassazettel wead analysiert…",
+  "receiptScanFailed": "Kassazettel hod ned glesen wern kenna. Bitte noamoi vasuachn.",
+  "receiptItems": "Positiona",
+  "receiptItem": "Position",
+  "receiptCreateSingle": "Oane Ausgab erstöin",
+  "receiptCreatePerItem": "Pro Position erstöin",
+  "receiptRetry": "Noamoi vasuachn",
+  "receiptPrev": "Zruck",
+  "receiptNext": "Weida",
+  "receiptRemoveItem": "Position wegnehma",
+  "receiptConfirmAll": "Ois bestätign",
+  "receiptBackToReview": "Zruck zur Übersicht"
 }

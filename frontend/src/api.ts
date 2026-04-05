@@ -324,3 +324,32 @@ export const extendLifetime = async (token: string): Promise<void> => {
     headers: { Authorization: `Bearer ${token}` },
   });
 };
+
+// Receipt scanning
+export interface ReceiptItem {
+  description: string;
+  amount: number;
+}
+
+export interface ScanReceiptResponse {
+  title: string;
+  total: number;
+  date: string | null;
+  currency: string | null;
+  items: ReceiptItem[];
+}
+
+export const scanReceipt = async (token: string, imageBase64: string, language: string): Promise<ScanReceiptResponse> => {
+  const res = await fetch(`${API_BASE}/receipt/scan`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ image: imageBase64, language }),
+  });
+  if (!res.ok) {
+    const status = res.status;
+    if (status === 503) throw new Error('Receipt scanning service unavailable');
+    if (status === 422) throw new Error('Could not parse receipt');
+    throw new Error('Receipt scan failed');
+  }
+  return res.json();
+};

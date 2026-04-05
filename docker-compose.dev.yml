@@ -1,6 +1,14 @@
-# Dev-only: exposes postgres on host for local backend development
-# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up postgres
+# Dev-only: exposes postgres and ollama on host for local backend development
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up postgres ollama
 services:
   postgres:
     ports:
       - "5433:5432"
+
+  ollama:
+    ports:
+      - "11434:11434"
+
+  app:
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}

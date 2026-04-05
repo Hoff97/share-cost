@@ -170,5 +170,21 @@
   "convertIncomeToTransfersDesc": "Ce revenu sera converti en {{count}} transfert(s) :",
   "convertTransferToIncomeDesc": "Ce transfert de {{from}} à {{to}} sera converti en revenu.",
   "groupExpiresSoon": "Expire bientôt",
-  "groupExpiresSoonDesc": "Ce groupe sera supprimé pour inactivité. Cliquez pour le conserver."
+  "groupExpiresSoonDesc": "Ce groupe sera supprimé pour inactivité. Cliquez pour le conserver.",
+  "scanReceipt": "Scanner un reçu",
+  "receiptCaptureHint": "Prenez une photo d'un reçu ou téléchargez une image",
+  "receiptCamera": "Appareil photo",
+  "receiptUpload": "Télécharger une image",
+  "receiptScanning": "Analyse du reçu…",
+  "receiptScanFailed": "Impossible de lire le reçu. Veuillez réessayer.",
+  "receiptItems": "Articles",
+  "receiptItem": "Article",
+  "receiptCreateSingle": "Créer une seule dépense",
+  "receiptCreatePerItem": "Créer par article",
+  "receiptRetry": "Réessayer",
+  "receiptPrev": "Précédent",
+  "receiptNext": "Suivant",
+  "receiptRemoveItem": "Supprimer l'article",
+  "receiptConfirmAll": "Tout confirmer",
+  "receiptBackToReview": "Retour à l'aperçu"
 }

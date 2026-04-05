@@ -170,5 +170,21 @@
   "convertIncomeToTransfersDesc": "Ten przychód zostanie przekonwertowany na {{count}} przelew(y):",
   "convertTransferToIncomeDesc": "Ten przelew od {{from}} do {{to}} zostanie przekonwertowany na przychód.",
   "groupExpiresSoon": "Wkrótce wygaśnie",
-  "groupExpiresSoonDesc": "Ta grupa zostanie usunięta z powodu braku aktywności. Kliknij, aby ją zachować."
+  "groupExpiresSoonDesc": "Ta grupa zostanie usunięta z powodu braku aktywności. Kliknij, aby ją zachować.",
+  "scanReceipt": "Skanuj paragon",
+  "receiptCaptureHint": "Zrób zdjęcie paragonu lub prześlij obraz",
+  "receiptCamera": "Aparat",
+  "receiptUpload": "Prześlij obraz",
+  "receiptScanning": "Analizowanie paragonu…",
+  "receiptScanFailed": "Nie udało się odczytać paragonu. Spróbuj ponownie.",
+  "receiptItems": "Pozycje",
+  "receiptItem": "Pozycja",
+  "receiptCreateSingle": "Utwórz jeden wydatek",
+  "receiptCreatePerItem": "Utwórz według pozycji",
+  "receiptRetry": "Spróbuj ponownie",
+  "receiptPrev": "Poprzedni",
+  "receiptNext": "Następny",
+  "receiptRemoveItem": "Usuń pozycję",
+  "receiptConfirmAll": "Potwierdź wszystkie",
+  "receiptBackToReview": "Powrót do przeglądu"
 }

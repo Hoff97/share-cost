@@ -7,6 +7,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       ROCKET_ADDRESS: "0.0.0.0"
       ROCKET_PORT: "8000"
+      OLLAMA_URL: ${OLLAMA_URL:-https://api.ollama.com}
+      OLLAMA_API_TOKEN: ${OLLAMA_API_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

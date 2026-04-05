@@ -170,5 +170,21 @@
   "convertIncomeToTransfersDesc": "Questo reddito verrà convertito in {{count}} trasferimento/i:",
   "convertTransferToIncomeDesc": "Questo trasferimento da {{from}} a {{to}} verrà convertito in un reddito.",
   "groupExpiresSoon": "Scade presto",
-  "groupExpiresSoonDesc": "Questo gruppo verrà eliminato per inattività. Clicca per mantenerlo."
+  "groupExpiresSoonDesc": "Questo gruppo verrà eliminato per inattività. Clicca per mantenerlo.",
+  "scanReceipt": "Scansiona scontrino",
+  "receiptCaptureHint": "Scatta una foto dello scontrino o carica un'immagine",
+  "receiptCamera": "Fotocamera",
+  "receiptUpload": "Carica immagine",
+  "receiptScanning": "Analisi dello scontrino…",
+  "receiptScanFailed": "Impossibile leggere lo scontrino. Riprova.",
+  "receiptItems": "Articoli",
+  "receiptItem": "Articolo",
+  "receiptCreateSingle": "Crea spesa unica",
+  "receiptCreatePerItem": "Crea per articolo",
+  "receiptRetry": "Riprova",
+  "receiptPrev": "Precedente",
+  "receiptNext": "Successivo",
+  "receiptRemoveItem": "Rimuovi articolo",
+  "receiptConfirmAll": "Conferma tutti",
+  "receiptBackToReview": "Torna all'anteprima"
 }

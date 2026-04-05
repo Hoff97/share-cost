@@ -14,6 +14,7 @@ import 'dayjs/locale/de';
 import * as api from '../offlineApi';
 import type { Group, Expense, Balance, Permissions, ShareLinkItem } from '../offlineApi';
 import { ExpenseCard } from './ExpenseCard';
+import { ReceiptScanner } from './ReceiptScanner';
 import { computeUserShare } from '../expenseUtils';
 import { useSync } from '../sync';
 import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, updateLastCheckedAt, updateLatestActivity, getStoredPaymentInfo, savePaymentInfo, setShowMyExpensesOnly as setShowMyExpensesOnlyStorage } from '../storage';
@@ -210,18 +211,69 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
         : undefined,
     );
 
-    setDescription('');
-    setAmount('');
-    setPaidBy(null);
-    setSplitBetween(allMemberIds);
-    setExpenseType('expense');
-    setTransferTo(null);
-    setExpenseDate(todayIso());
-    setExpenseCurrency(group.currency);
-    setExchangeRate(1);
-    setSplitType('equal');
-    setSplitShares({});
+    // If receipt items are queued, don't reset — handleReceiptItemSubmitted will pre-fill next item
+    if (receiptItems.length === 0 || receiptItemIndex >= receiptItems.length - 1) {
+      setDescription('');
+      setAmount('');
+      setPaidBy(null);
+      setSplitBetween(allMemberIds);
+      setExpenseType('expense');
+      setTransferTo(null);
+      setExpenseDate(todayIso());
+      setExpenseCurrency(group.currency);
+      setExchangeRate(1);
+      setSplitType('equal');
+      setSplitShares({});
+    }
     loadData();
+  };
+
+  // Receipt scan: create a single expense from the total
+  const handleReceiptSingle = (desc: string, amount: number, date: string | null, currency: string | null) => {
+    setDescription(desc);
+    setAmount(amount);
+    setExpenseType('expense');
+    if (date) setExpenseDate(date);
+    if (currency) setExpenseCurrency(currency);
+    setSplitBetween(allMemberIds);
+    setSplitType('equal');
+    toggleAddEntry();
+  };
+
+  // Receipt scan: queue items for sequential creation
+  const handleReceiptItems = (items: Array<{ description: string; amount: number; date: string | null }>, currency: string | null) => {
+    if (items.length === 0) return;
+    setReceiptItems(items);
+    setReceiptItemIndex(0);
+    // Pre-fill form with first item
+    const first = items[0];
+    setDescription(first.description);
+    setAmount(first.amount);
+    setExpenseType('expense');
+    if (first.date) setExpenseDate(first.date);
+    if (currency) setExpenseCurrency(currency);
+    setSplitBetween(allMemberIds);
+    setSplitType('equal');
+    toggleAddEntry();
+  };
+
+  // When submitting an expense with receipt items queued, advance to the next item
+  const handleReceiptItemSubmitted = () => {
+    const nextIndex = receiptItemIndex + 1;
+    if (nextIndex < receiptItems.length) {
+      setReceiptItemIndex(nextIndex);
+      const item = receiptItems[nextIndex];
+      setDescription(item.description);
+      setAmount(item.amount);
+      setExpenseType('expense');
+      if (item.date) setExpenseDate(item.date);
+      setSplitBetween(allMemberIds);
+      setSplitType('equal');
+    } else {
+      // All items processed — clear queue
+      setReceiptItems([]);
+      setReceiptItemIndex(0);
+    }
   };
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -458,6 +510,9 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const memberOptions = group.members.map((m) => ({ value: m.id, label: m.name }));
 
   const [addEntryOpened, { toggle: toggleAddEntry, close: closeAddEntry }] = useDisclosure(false);
+  const [receiptOpened, { toggle: toggleReceipt, close: closeReceipt }] = useDisclosure(false);
+  const [receiptItems, setReceiptItems] = useState<Array<{ description: string; amount: number; date: string | null }>>([]);
+  const [receiptItemIndex, setReceiptItemIndex] = useState(0);
   const [expandedBalances, setExpandedBalances] = useState<Set<string>>(new Set());
   const [expandedExpenses, setExpandedExpenses] = useState<Set<string>>(new Set());
   const [totalExpanded, setTotalExpanded] = useState(false);
@@ -751,11 +806,23 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
           {/* Add Entry Modal — only shown if user can add expenses */}
           {permissions.can_add_expenses && (
           <>
-          <Button fullWidth mb="md" onClick={toggleAddEntry}>
+          <MGroup grow mb="md">
+          <Button fullWidth onClick={toggleAddEntry}>
             {t('addEntry')}
           </Button>
-          <Modal opened={addEntryOpened} onClose={closeAddEntry} title={t('addEntry')} centered size="md">
-              <form onSubmit={(e) => { handleAddExpense(e); closeAddEntry(); }}>
+          <Button fullWidth variant="light" onClick={toggleReceipt}>
+            {t('scanReceipt')}
+          </Button>
+          </MGroup>
+          <ReceiptScanner
+            token={token}
+            opened={receiptOpened}
+            onClose={closeReceipt}
+            onCreateSingle={handleReceiptSingle}
+            onCreateItems={handleReceiptItems}
+          />
+          <Modal opened={addEntryOpened} onClose={() => { closeAddEntry(); setReceiptItems([]); setReceiptItemIndex(0); }} title={receiptItems.length > 0 ? `${t('addEntry')} (${receiptItemIndex + 1}/${receiptItems.length})` : t('addEntry')} centered size="md">
+              <form onSubmit={(e) => { handleAddExpense(e).then(() => { if (receiptItems.length > 0) { handleReceiptItemSubmitted(); } else { closeAddEntry(); } }); }}>
                 <Stack gap="sm">
                   <MGroup gap={4} align="center">
                     <SegmentedControl

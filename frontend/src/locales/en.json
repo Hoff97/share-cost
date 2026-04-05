@@ -170,5 +170,21 @@
   "convertIncomeToTransfersDesc": "This income will be converted into {{count}} transfer(s):",
   "convertTransferToIncomeDesc": "This transfer from {{from}} to {{to}} will be converted into an income entry.",
   "groupExpiresSoon": "Expires soon",
-  "groupExpiresSoonDesc": "This group will be deleted due to inactivity. Click to keep it."
+  "groupExpiresSoonDesc": "This group will be deleted due to inactivity. Click to keep it.",
+  "scanReceipt": "Scan Receipt",
+  "receiptCaptureHint": "Take a photo of a receipt or upload an image",
+  "receiptCamera": "Camera",
+  "receiptUpload": "Upload Image",
+  "receiptScanning": "Analyzing receipt…",
+  "receiptScanFailed": "Could not read receipt. Please try again.",
+  "receiptItems": "Items",
+  "receiptItem": "Item",
+  "receiptCreateSingle": "Create Single Expense",
+  "receiptCreatePerItem": "Create Per Item",
+  "receiptRetry": "Try Again",
+  "receiptPrev": "Previous",
+  "receiptNext": "Next",
+  "receiptRemoveItem": "Remove Item",
+  "receiptConfirmAll": "Confirm All",
+  "receiptBackToReview": "Back to Review"
 }

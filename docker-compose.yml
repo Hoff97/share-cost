@@ -7,10 +7,22 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       ROCKET_ADDRESS: "0.0.0.0"
       ROCKET_PORT: "8000"
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: share_cost_ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
 
   nginx:
     build: ./nginx
@@ -46,3 +58,4 @@ volumes:
   postgres_data:
   letsencrypt_data:
   certbot_webroot:
+  ollama_data:
