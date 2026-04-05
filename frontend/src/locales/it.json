@@ -186,5 +186,6 @@
   "receiptNext": "Successivo",
   "receiptRemoveItem": "Rimuovi articolo",
   "receiptConfirmAll": "Conferma tutti",
-  "receiptBackToReview": "Torna all'anteprima"
+  "receiptBackToReview": "Torna all'anteprima",
+  "receiptSkipItem": "Salta"
 }

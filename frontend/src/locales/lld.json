@@ -185,5 +185,6 @@
   "receiptNext": "Dedò",
   "receiptRemoveItem": "Tò via l'artìcol",
   "receiptConfirmAll": "Confermè duc",
-  "receiptBackToReview": "Torna ala prevista"
+  "receiptBackToReview": "Torna ala prevista",
+  "receiptSkipItem": "Sauté"
 }

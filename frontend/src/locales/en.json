@@ -186,5 +186,6 @@
   "receiptNext": "Next",
   "receiptRemoveItem": "Remove Item",
   "receiptConfirmAll": "Confirm All",
-  "receiptBackToReview": "Back to Review"
+  "receiptBackToReview": "Back to Review",
+  "receiptSkipItem": "Skip Item"
 }

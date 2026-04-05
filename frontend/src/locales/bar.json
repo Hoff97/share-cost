@@ -186,5 +186,6 @@
   "receiptNext": "Weida",
   "receiptRemoveItem": "Position wegnehma",
   "receiptConfirmAll": "Ois bestätign",
-  "receiptBackToReview": "Zruck zur Übersicht"
+  "receiptBackToReview": "Zruck zur Übersicht",
+  "receiptSkipItem": "Übaspringen"
 }

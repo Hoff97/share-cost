@@ -11,6 +11,7 @@ use rocket::fs::NamedFile;
 use rocket::http::ContentType;
 use rocket::http::Method;
 use rocket_cors::{AllowedHeaders, AllowedOrigins, CorsOptions};
+use rocket_governor::rocket_governor_catcher;
 use std::path::{Path, PathBuf};
 
 // Serve the PWA manifest with the correct Content-Type (Rocket doesn't know .webmanifest)
@@ -75,6 +76,7 @@ fn rocket() -> _ {
             },
         ))
         .mount("/api", routes::get_routes())
+        .register("/api", catchers![rocket_governor_catcher])
         .attach(AdHoc::on_liftoff("Cleanup Scheduler", |_rocket| Box::pin(async {
             rocket::tokio::spawn(async {
                 let mut interval = rocket::tokio::time::interval(rocket::tokio::time::Duration::from_secs(24 * 60 * 60));

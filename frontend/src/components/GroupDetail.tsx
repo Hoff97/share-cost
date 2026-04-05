@@ -270,9 +270,10 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       setSplitBetween(allMemberIds);
       setSplitType('equal');
     } else {
-      // All items processed — clear queue
+      // All items processed — clear queue and close
       setReceiptItems([]);
       setReceiptItemIndex(0);
+      closeAddEntry();
     }
   };
 
@@ -806,13 +807,13 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
           {/* Add Entry Modal — only shown if user can add expenses */}
           {permissions.can_add_expenses && (
           <>
-          <MGroup grow mb="md">
-          <Button fullWidth onClick={toggleAddEntry}>
+          <MGroup mb="md">
+          <Button style={{ flex: 1 }} onClick={toggleAddEntry}>
             {t('addEntry')}
           </Button>
-          <Button fullWidth variant="light" onClick={toggleReceipt}>
-            {t('scanReceipt')}
-          </Button>
+          <ActionIcon variant="light" size="input-sm" onClick={toggleReceipt} title={t('scanReceipt')}>
+            📷
+          </ActionIcon>
           </MGroup>
           <ReceiptScanner
             token={token}
@@ -1077,6 +1078,13 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   <Button type="submit" fullWidth disabled={!isAddFormValid}>
                     {expenseType === 'transfer' ? t('addTransfer') : expenseType === 'income' ? t('addIncome') : t('addExpense')}
                   </Button>
+                  {receiptItems.length > 0 && (
+                    <Button fullWidth variant="subtle" color="gray" onClick={() => {
+                      handleReceiptItemSubmitted();
+                    }}>
+                      {t('receiptSkipItem')}
+                    </Button>
+                  )}
                 </Stack>
               </form>
           </Modal>

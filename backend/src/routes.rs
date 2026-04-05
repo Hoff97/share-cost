@@ -8,10 +8,29 @@ use rocket::serde::json::Json;
 use serde::{Deserialize, Serialize};
 use sqlx;
 use uuid::Uuid;
+use rocket_governor::{Method, Quota, RocketGovernable, RocketGovernor};
 
 use crate::auth::{GroupAuth, Permissions, generate_token, validate_token};
 use crate::db;
 use crate::models::*;
+
+/// Rate limit for share code redemption: 10 requests per second per IP.
+pub struct RedeemRateLimit;
+
+impl<'r> RocketGovernable<'r> for RedeemRateLimit {
+    fn quota(_method: Method, _route_name: &str) -> Quota {
+        Quota::per_second(Self::nonzero(10u32))
+    }
+}
+
+/// Rate limit for receipt scanning: 10 requests per second per IP.
+pub struct ScanRateLimit;
+
+impl<'r> RocketGovernable<'r> for ScanRateLimit {
+    fn quota(_method: Method, _route_name: &str) -> Quota {
+        Quota::per_second(Self::nonzero(10u32))
+    }
+}
 
 // Health check
 #[get("/health")]
@@ -930,6 +949,7 @@ async fn generate_share_link(
 // Redeem a short share code → returns a JWT token (no auth required)
 #[post("/share/redeem", data = "<request>")]
 async fn redeem_share_code(
+    _rate_limit: RocketGovernor<'_, RedeemRateLimit>,
     request: Json<RedeemShareCodeRequest>,
 ) -> Result<Json<ShareLinkResponse>, Status> {
     let pool = db::get_pool();
@@ -1194,7 +1214,12 @@ async fn extend_lifetime(auth: GroupAuth) -> Result<Status, Status> {
 // ---------- Receipt scanning via Ollama ----------
 
 fn ollama_url() -> String {
-    std::env::var("OLLAMA_URL").unwrap_or_else(|_| "http://localhost:11434".to_string())
+    std::env::var("OLLAMA_URL").unwrap_or_else(|_| "https://api.ollama.com".to_string())
+}
+
+/// Local Ollama URL for OCR. Falls back to OLLAMA_URL if not set.
+fn ollama_local_url() -> String {
+    std::env::var("OLLAMA_LOCAL_URL").unwrap_or_else(|_| ollama_url())
 }
 
 fn ollama_api_token() -> Option<String> {
@@ -1226,16 +1251,12 @@ struct OllamaResponseMessage {
     content: String,
 }
 
-/// Ensure a model is available in Ollama, pulling it if necessary.
-async fn ensure_model(client: &reqwest::Client, base: &str, model: &str, token: &Option<String>) -> Result<(), Status> {
-    // Check if model exists via /api/show
-    let mut show_req = client
+/// Ensure a model is available in a local Ollama instance, pulling it if necessary.
+/// Skipped when using a cloud API (i.e. when a token is provided).
+async fn ensure_model(client: &reqwest::Client, base: &str, model: &str) -> Result<(), Status> {
+    let show_resp = client
         .post(format!("{}/api/show", base))
-        .json(&serde_json::json!({ "name": model }));
-    if let Some(t) = token {
-        show_req = show_req.bearer_auth(t);
-    }
-    let show_resp = show_req
+        .json(&serde_json::json!({ "name": model }))
         .send()
         .await
         .map_err(|_| Status::ServiceUnavailable)?;
@@ -1244,15 +1265,10 @@ async fn ensure_model(client: &reqwest::Client, base: &str, model: &str, token: 
         return Ok(());
     }
 
-    // Pull the model
     eprintln!("Pulling Ollama model: {}", model);
-    let mut pull_req = client
+    let pull_resp = client
         .post(format!("{}/api/pull", base))
-        .json(&serde_json::json!({ "name": model, "stream": false }));
-    if let Some(t) = token {
-        pull_req = pull_req.bearer_auth(t);
-    }
-    let pull_resp = pull_req
+        .json(&serde_json::json!({ "name": model, "stream": false }))
         .send()
         .await
         .map_err(|_| Status::ServiceUnavailable)?;
@@ -1308,40 +1324,52 @@ async fn ollama_chat(
     Ok(chat_resp.message.content)
 }
 
-const OCR_MODEL: &str = "glm-ocr:q8_0";
-const EXTRACT_MODEL: &str = "gemma4:e2b";
+fn ocr_model() -> String {
+    std::env::var("OCR_MODEL").unwrap_or_else(|_| "glm-ocr:q8_0".to_string())
+}
+
+fn extract_model() -> String {
+    std::env::var("EXTRACT_MODEL").unwrap_or_else(|_| "gemma4:31b-cloud".to_string())
+}
 
 #[post("/receipt/scan", data = "<request>")]
 async fn scan_receipt(
     _auth: GroupAuth,
+    _rate_limit: RocketGovernor<'_, ScanRateLimit>,
     request: Json<ScanReceiptRequest>,
 ) -> Result<Json<ScanReceiptResponse>, Status> {
-    let base = ollama_url();
+    let cloud_url = ollama_url();
+    let local_url = ollama_local_url();
     let api_token = ollama_api_token();
+    // Use token for OCR only when using the cloud URL (no explicit OLLAMA_LOCAL_URL set)
+    let ocr_token = if std::env::var("OLLAMA_LOCAL_URL").is_ok() { None } else { api_token.clone() };
+    let ocr = ocr_model();
+    let extract = extract_model();
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
         .map_err(|_| Status::InternalServerError)?;
 
-    // Ensure both models are available
-    ensure_model(&client, &base, OCR_MODEL, &api_token).await?;
-    ensure_model(&client, &base, EXTRACT_MODEL, &api_token).await?;
+    // Pull OCR model on local Ollama if needed (skip for cloud)
+    if ocr_token.is_none() {
+        ensure_model(&client, &local_url, &ocr).await?;
+    }
 
-    // Step 1: OCR — extract text from the image using the vision model
+    // Step 1: OCR — extract text from the image using a local vision model
     let ocr_text = ollama_chat(
         &client,
-        &base,
-        OCR_MODEL,
+        &local_url,
+        &ocr,
         vec![OllamaChatMessage {
             role: "user".to_string(),
             content: "Extract ALL text from this receipt image. Include every line, every number, every price. Output ONLY the raw text, nothing else.".to_string(),
             images: Some(vec![request.image.clone()]),
         }],
-        &api_token,
+        &ocr_token,
     )
     .await?;
 
-    // Step 2: Extract structured data using the language model
+    // Step 2: Extract structured data using the cloud language model
     let lang = &request.language;
     let extract_prompt = format!(
         r#"You are a receipt parser. Given the OCR text of a receipt below, extract structured data as JSON.
@@ -1366,8 +1394,8 @@ OCR Text:
 
     let extract_result = ollama_chat(
         &client,
-        &base,
-        EXTRACT_MODEL,
+        &cloud_url,
+        &extract,
         vec![OllamaChatMessage {
             role: "user".to_string(),
             content: extract_prompt,

@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import {
   Modal, Button, Stack, Text, Group as MGroup, Loader, Alert,
   Paper, NumberInput, TextInput, ActionIcon, Center, FileButton,
-  SegmentedControl, Badge,
+  SegmentedControl, Badge, Divider,
 } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
 import { scanReceipt, type ScanReceiptResponse, type ReceiptItem } from '../api';
@@ -83,8 +83,12 @@ export function ReceiptScanner({ token, opened, onClose, onCreateSingle, onCreat
       // Resize large images to reduce payload size
       const img = new Image();
       img.onload = () => {
-        const maxDim = 2048;
         let { width, height } = img;
+        // Downscale by factor 2 by default
+        width = Math.round(width / 2);
+        height = Math.round(height / 2);
+        // Also cap at maxDim
+        const maxDim = 2048;
         if (width > maxDim || height > maxDim) {
           const scale = maxDim / Math.max(width, height);
           width = Math.round(width * scale);
@@ -130,10 +134,9 @@ export function ReceiptScanner({ token, opened, onClose, onCreateSingle, onCreat
 
   const handleStartItemEdit = () => {
     if (editItems.length === 0) return;
-    setCurrentItemIndex(0);
-    setItemDescription(editItems[0].description);
-    setItemAmount(editItems[0].amount);
-    setPhase('edit-items');
+    // Go straight to GroupDetail item-by-item flow (skip duplicate edit phase)
+    onCreateItems(editItems.map(it => ({ ...it, date: editDate })), editCurrency);
+    handleClose();
   };
 
   const handleItemNext = () => {
