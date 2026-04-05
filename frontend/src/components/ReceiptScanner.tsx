@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import {
   Modal, Button, Stack, Text, Group as MGroup, Loader, Alert,
   Paper, NumberInput, TextInput, ActionIcon, Center, FileButton,
-  SegmentedControl, Badge, Divider,
+  Badge, Divider,
 } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
 import { scanReceipt, type ScanReceiptResponse, type ReceiptItem } from '../api';
