@@ -656,8 +656,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     // Backtrack to find the actual partition
     const fullMask = totalSubsets - 1;
     const groups: Person[][] = [];
-    let remaining = fullMask;
-
+    
     // Greedy backtrack: repeatedly find a zero-sum subset to remove
     const backtrack = (mask: number): boolean => {
       if (mask === 0) return true;
