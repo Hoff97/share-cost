@@ -186,5 +186,15 @@
   "receiptRemoveItem": "Tò via l'artìcol",
   "receiptConfirmAll": "Confermè duc",
   "receiptBackToReview": "Torna ala prevista",
-  "receiptSkipItem": "Sauté"
+  "receiptSkipItem": "Sauté",
+
+  "exportData": "Esporta dati",
+  "exportGroupJSON": "Scarica come JSON",
+  "exportGroupPDF": "Scarica come PDF",
+  "exportFailed": "L'esportazione n'é nia riuscida",
+  "importGroup": "Importa grup",
+  "importGroupDesc": "Importa ina backup di grup precedentamang esportada",
+  "importFile": "Seleziona file JSON",
+  "importError": "Fala durant l'importazion dal grup",
+  "importSuccess": "Grup importada bala-bala"
 }

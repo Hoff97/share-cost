@@ -187,5 +187,15 @@
   "receiptRemoveItem": "Position wegnehma",
   "receiptConfirmAll": "Ois bestätign",
   "receiptBackToReview": "Zruck zur Übersicht",
-  "receiptSkipItem": "Übaspringen"
+  "receiptSkipItem": "Übaspringen",
+
+  "exportData": "Daten exportiern",
+  "exportGroupJSON": "As JSON loadn",
+  "exportGroupPDF": "As PDF loadn",
+  "exportFailed": "Exportiern fischlaung",
+  "importGroup": "Gruppe importiern",
+  "importGroupDesc": "A friara exportiart Gruppen-Sicherung importiern",
+  "importFile": "JSON-Datei aussuachn",
+  "importError": "Fehla beim Importiern da Gruppe",
+  "importSuccess": "Gruppe erfolgraich importiert"
 }

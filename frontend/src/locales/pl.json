@@ -187,5 +187,15 @@
   "receiptRemoveItem": "Usuń pozycję",
   "receiptConfirmAll": "Potwierdź wszystkie",
   "receiptBackToReview": "Powrót do przeglądu",
-  "receiptSkipItem": "Pomiń"
+  "receiptSkipItem": "Pomiń",
+
+  "exportData": "Eksportuj dane",
+  "exportGroupJSON": "Pobierz jako JSON",
+  "exportGroupPDF": "Pobierz jako PDF",
+  "exportFailed": "Eksport nie powiódł się",
+  "importGroup": "Importuj grupę",
+  "importGroupDesc": "Importuj wcześniej wyeksportowaną kopię zapasową grupy",
+  "importFile": "Wybierz plik JSON",
+  "importError": "Błąd podczas importowania grupy",
+  "importSuccess": "Grupa zaimportowana pomyślnie"
 }

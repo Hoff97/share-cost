@@ -187,5 +187,15 @@
   "receiptRemoveItem": "Remove Item",
   "receiptConfirmAll": "Confirm All",
   "receiptBackToReview": "Back to Review",
-  "receiptSkipItem": "Skip Item"
+  "receiptSkipItem": "Skip Item",
+
+  "exportData": "Export Data",
+  "exportGroupJSON": "Download as JSON",
+  "exportGroupPDF": "Download as PDF",
+  "exportFailed": "Export failed",
+  "importGroup": "Import Group",
+  "importGroupDesc": "Import a previously exported group backup",
+  "importFile": "Select JSON file",
+  "importError": "Failed to import group",
+  "importSuccess": "Group imported successfully"
 }
