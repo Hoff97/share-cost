@@ -122,6 +122,7 @@ export const downloadGroupPDF = (
 
   const sc = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2]);
   const check = (need = 10) => { if (y > pageHeight - need) { doc.addPage(); y = 20; } };
+  const pdfText = (text: string): string => text.replace(/→/g, '->');
 
   const fmtDate = (s: string): string => {
     const d = new Date(s);
@@ -159,7 +160,7 @@ export const downloadGroupPDF = (
   if (group.members.length > 0) {
     doc.setFontSize(9);
     sc(C.light);
-    const memberStr: string = group.members.map(m => m.name || 'Unknown').join('  \u00B7  ');
+    const memberStr: string = pdfText(group.members.map(m => m.name || 'Unknown').join('  \u00B7  '));
     const memberLines: string[] = doc.splitTextToSize(memberStr, pageWidth - margin * 2);
     for (const line of memberLines) { check(6); doc.text(line, margin, y); y += 5; }
     y += 1;
@@ -168,7 +169,7 @@ export const downloadGroupPDF = (
   // Export info
   doc.setFontSize(9);
   sc(C.light);
-  doc.text(`Exported: ${fmtDate(new Date().toISOString())}  |  Currency: ${group.currency || 'USD'}`, margin, y);
+  doc.text(pdfText(`Exported: ${fmtDate(new Date().toISOString())}  |  Currency: ${group.currency || 'USD'}`), margin, y);
   sc(C.text);
   y += 8;
 
@@ -199,8 +200,9 @@ export const downloadGroupPDF = (
     const amount: number  = expense.amount * expense.exchange_rate;
     const amtStr: string  = `${amount.toFixed(2)} ${expense.currency || group.currency || 'USD'}`;
     const dateStr: string = fmtDate(expense.expense_date || expense.created_at || '');
-    const desc: string    = expense.description || '(no description)';
+    const desc: string    = pdfText(expense.description || '(no description)');
     const accent          = typeColor(expense.expense_type);
+    const textX: number   = xDesc;
 
     // Date
     doc.setFontSize(8);
@@ -208,12 +210,12 @@ export const downloadGroupPDF = (
     doc.text(dateStr, xDate, y);
 
     // Description (bold, accent color)
-    const descMaxW: number = xAmt - xDesc - doc.getTextWidth(amtStr) - 6;
+    const descMaxW: number = xAmt - textX - doc.getTextWidth(amtStr) - 6;
     doc.setFontSize(9);
     doc.setFont(undefined, 'bold');
     sc(accent);
     const descLines: string[] = doc.splitTextToSize(desc, descMaxW);
-    doc.text(descLines[0], xDesc, y);
+    doc.text(descLines[0], textX, y);
 
     // Amount (right-aligned, bold, accent)
     sc(accent);
@@ -227,7 +229,7 @@ export const downloadGroupPDF = (
     if (descLines.length > 1) {
       doc.setFontSize(8);
       sc(C.light);
-      for (let i = 1; i < descLines.length; i++) { check(5); doc.text(descLines[i], xDesc, y); y += 4; }
+      for (let i = 1; i < descLines.length; i++) { check(5); doc.text(descLines[i], textX, y); y += 4; }
     }
 
     // Participants line
@@ -241,17 +243,17 @@ export const downloadGroupPDF = (
     let participantLine: string;
     if (expense.expense_type === 'transfer') {
       const to = group.members.find(m => m.id === expense.transfer_to)?.name || 'Unknown';
-      participantLine = `${paidBy} → ${to}`;
+      participantLine = pdfText(`${paidBy} -> ${to}`);
     } else if (expense.expense_type === 'income') {
-      participantLine = `received by ${participantNames.join(', ')}`;
+      participantLine = pdfText(`received by ${participantNames.join(', ')}`);
     } else {
-      participantLine = `paid by ${paidBy}` + (participantNames.length > 1 ? `, split: ${participantNames.join(', ')}` : '');
+      participantLine = pdfText(`paid by ${paidBy}` + (participantNames.length > 1 ? `, split: ${participantNames.join(', ')}` : ''));
     }
 
     doc.setFontSize(8);
     sc(C.light);
-    const partLines: string[] = doc.splitTextToSize(participantLine, pageWidth - xDesc - margin);
-    for (const line of partLines) { check(5); doc.text(line, xDesc, y); y += 4; }
+    const partLines: string[] = doc.splitTextToSize(participantLine, pageWidth - textX - margin);
+    for (const line of partLines) { check(5); doc.text(line, textX, y); y += 4; }
 
     sc(C.text);
     y += 3;
@@ -262,11 +264,15 @@ export const downloadGroupPDF = (
 
   // ── Expenses Summary ──────────────────────────────────────────
   sectionHead('Expenses Summary');
-  const total: number = expenses.reduce((sum, e) => sum + e.amount * e.exchange_rate, 0);
+  const total: number = expenses.reduce((sum, exp) => {
+    const amt = exp.amount * exp.exchange_rate;
+    if (exp.expense_type === 'transfer') return sum;
+    return exp.expense_type === 'income' ? sum - amt : sum + amt;
+  }, 0);
   doc.setFontSize(10);
   doc.setFont(undefined, 'bold');
   sc(C.primary);
-  doc.text(`Total: ${total.toFixed(2)} ${group.currency || 'USD'}`, margin, y);
+  doc.text(`Total expenses: ${total.toFixed(2)} ${group.currency || 'USD'}`, margin, y);
   doc.setFont(undefined, 'normal');
   sc(C.text);
   y += 8;
@@ -299,21 +305,26 @@ export const downloadGroupPDF = (
       // Header line: "Alice is owed 863.46 EUR:" / "Bob owes 39.46 EUR:"
       doc.setFontSize(10);
       let x: number = margin;
+      const roundedBalance: number = Math.round(bal.balance * 100) / 100;
+      const isZeroBalance: boolean = Math.abs(roundedBalance) < 0.005;
+      const displayBalance: number = isZeroBalance ? 0 : roundedBalance;
 
       doc.setFont(undefined, 'bold');
       sc(C.text);
       doc.text(bal.user_name || 'Unknown', x, y);
       x += doc.getTextWidth(bal.user_name || 'Unknown');
 
-      const verb: string = bal.balance > 0 ? ' is owed ' : ' owes ';
+      const verb: string = displayBalance > 0 ? ' is owed ' : displayBalance < 0 ? ' owes ' : ' has a balance of ';
       doc.setFont(undefined, 'normal');
       sc(C.light);
       doc.text(verb, x, y);
       x += doc.getTextWidth(verb);
 
       doc.setFont(undefined, 'bold');
-      sc(bal.balance > 0 ? C.positive : C.negative);
-      const balStr: string = `${Math.abs(bal.balance).toFixed(2)} ${group.currency || 'USD'}:`;
+      const balColor: [number, number, number] = displayBalance > 0 ? C.positive : displayBalance < 0 ? C.negative : C.text;
+      sc(balColor);
+      const balValue: string = `${Math.abs(displayBalance).toFixed(2)} ${group.currency || 'USD'}`;
+      const balStr: string = displayBalance === 0 ? `${balValue}:` : `${balValue}:`;
       doc.text(balStr, x, y);
 
       doc.setFont(undefined, 'normal');
@@ -326,9 +337,9 @@ export const downloadGroupPDF = (
         check(6);
         doc.setFontSize(9);
         const bulletAmt: string = `${line.amount.toFixed(2)} ${group.currency || 'USD'}`;
-        const counterpart: string = line.direction === 'owes'
-          ? `  \u2022  ${bulletAmt} to ${line.counterpartName}`
-          : `  \u2022  ${bulletAmt} by ${line.counterpartName}`;
+        const counterpart: string = pdfText(line.direction === 'owes'
+          ? `- ${bulletAmt} to ${line.counterpartName}`
+          : `- ${bulletAmt} by ${line.counterpartName}`);
         sc(line.direction === 'owed' ? C.positive : C.negative);
         doc.text(counterpart, margin, y);
         sc(C.text);

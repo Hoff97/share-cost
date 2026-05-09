@@ -42,9 +42,10 @@ const currencyData = CURRENCIES.map(c => ({ value: c, label: c }));
 const SYM: Record<string, string> = { EUR: '€', USD: '$', GBP: '£', JPY: '¥' };
 const cs = (c: string) => SYM[c] || c;
 const fmtAmt = (n: number, c: string) => {
+  const rounded = Math.round(n * 100) / 100;
   const s = SYM[c];
-  const abs = Math.abs(n).toFixed(2);
-  const sign = n < 0 ? '-' : '';
+  const abs = Math.abs(rounded).toFixed(2);
+  const sign = rounded < 0 ? '-' : '';
   return s ? `${sign}${s}${abs}` : `${sign}${abs} ${c}`;
 };
 const fetchRate = async (from: string, to: string, date: string): Promise<number | null> => {
@@ -1196,6 +1197,9 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
               const isExpanded = expandedBalances.has(balance.user_id);
               const { owes, owedBy } = getSettlementsForMember(balance.user_id);
               const hasSettlements = owes.length > 0 || owedBy.length > 0;
+              const roundedBalance = Math.round(balance.balance * 100) / 100;
+              const balanceColor = roundedBalance > 0 ? 'green' : roundedBalance < 0 ? 'red' : 'dimmed';
+              const balancePrefix = roundedBalance > 0 ? '+' : roundedBalance < 0 ? '-' : '';
 
               return (
                 <Card
@@ -1227,8 +1231,8 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         )}
                       </Text>
                     </MGroup>
-                    <Text fw={700} size="lg" c={balance.balance >= 0 ? 'green' : 'red'}>
-                      {balance.balance >= 0 ? '+' : ''}{fmtAmt(balance.balance, group.currency)}
+                    <Text fw={700} size="lg" c={balanceColor}>
+                      {balancePrefix}{fmtAmt(roundedBalance, group.currency)}
                     </Text>
                   </MGroup>
                   <Collapse in={isExpanded}>
