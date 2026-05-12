@@ -5,6 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // iOS fallback: prevent input-focus zoom in Safari/PWA by capping max scale.
+      (function () {
+        var ua = navigator.userAgent || '';
+        var isIOS = /iPhone|iPad|iPod/.test(ua) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if (!isIOS) return;
+        var viewport = document.querySelector('meta[name="viewport"]');
+        if (!viewport) return;
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover');
+      })();
+    </script>
     <meta name="theme-color" content="#228be6" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1a1b1e" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Split expenses with friends and groups" />

@@ -4,6 +4,7 @@ import { MantineProvider, createTheme } from '@mantine/core'
 import { NuqsAdapter } from 'nuqs/adapters/react'
 import '@mantine/core/styles.css'
 import '@mantine/dates/styles.css'
+import './global.css'
 import './i18n'
 import App from './App.tsx'
 
