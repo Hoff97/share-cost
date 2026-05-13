@@ -1232,7 +1232,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       </Text>
                     </MGroup>
                     <Text fw={700} size="lg" c={balanceColor}>
-                      {balancePrefix}{fmtAmt(roundedBalance, group.currency)}
+                      {balancePrefix}{fmtAmt(Math.abs(roundedBalance), group.currency)}
                     </Text>
                   </MGroup>
                   <Collapse in={isExpanded}>
