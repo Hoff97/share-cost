@@ -195,5 +195,6 @@
   "importGroupDesc": "Importar una copia de seguridad de grupo previamente exportada",
   "importFile": "Seleccionar archivo JSON",
   "importError": "Error al importar el grupo",
-  "importSuccess": "Grupo importado exitosamente"
+  "importSuccess": "Grupo importado exitosamente",
+  "lowIncomeEasterEgg": "lo siento, esta app solo fue hecha para mileuristas"
 }

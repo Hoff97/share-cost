@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQueryState, parseAsStringLiteral } from 'nuqs';
 import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
   Group as MGroup, SegmentedControl, Checkbox, Badge, Card, Slider,
   Divider, CopyButton, Tooltip, Collapse, Tabs, Anchor, ActionIcon,
-  Modal, Switch, CloseButton, Center, useComputedColorScheme,
+  Modal, Switch, CloseButton, Center, useComputedColorScheme, Popover,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { DatePickerInput } from '@mantine/dates';
@@ -65,6 +65,14 @@ const snapToMark = (val: number, target: number, max: number) => {
   return Math.abs(val - target) < threshold ? target : val;
 };
 
+const exceedsDecimal12_2Limit = (value: number | string): boolean => {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value));
+  if (!Number.isFinite(parsed)) return false;
+  const integerDigits = Math.trunc(Math.abs(parsed)).toString().length;
+  // DECIMAL(12,2) allows at most 10 digits before decimal point.
+  return integerDigits > 10;
+};
+
 export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: GroupDetailProps) {
   const { t } = useTranslation();
   const colorScheme = useComputedColorScheme('light');
@@ -93,6 +101,11 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [splitType, setSplitType] = useState('equal');
   const [splitShares, setSplitShares] = useState<Record<string, number>>({});
+  const [isAddingExpense, setIsAddingExpense] = useState(false);
+  const isAddingExpenseRef = useRef(false);
+  const [amountEasterEggOpened, setAmountEasterEggOpened] = useState(false);
+  const [expenseTypeHelpOpened, setExpenseTypeHelpOpened] = useState(false);
+  const [splitMethodHelpOpened, setSplitMethodHelpOpened] = useState(false);
   const [showMyExpensesOnly, setShowMyExpensesOnly] = useState(() => {
     const stored = getStoredGroup(group.id);
     return stored?.showMyExpensesOnly ?? false;
@@ -192,43 +205,55 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     return true;
   })();
 
-  const handleAddExpense = async (e: React.FormEvent) => {
+  const handleAddExpense = async (e: React.FormEvent): Promise<boolean> => {
     e.preventDefault();
-    if (!isAddFormValid) return;
-
-    await api.createExpense(
-      token,
-      group.id,
-      description,
-      typeof amount === 'string' ? parseFloat(amount) : amount,
-      paidBy!,
-      splitBetween,
-      expenseType,
-      expenseType === 'transfer' ? (transferTo ?? undefined) : undefined,
-      expenseDate || todayIso(),
-      expenseCurrency,
-      exchangeRate,
-      splitType,
-      (splitType !== 'equal')
-        ? splitBetween.map(id => ({ member_id: id, share: splitShares[id] ?? 0 }))
-        : undefined,
-    );
-
-    // If receipt items are queued, don't reset — handleReceiptItemSubmitted will pre-fill next item
-    if (receiptItems.length === 0 || receiptItemIndex >= receiptItems.length - 1) {
-      setDescription('');
-      setAmount('');
-      setPaidBy(null);
-      setSplitBetween(allMemberIds);
-      setExpenseType('expense');
-      setTransferTo(null);
-      setExpenseDate(todayIso());
-      setExpenseCurrency(group.currency);
-      setExchangeRate(1);
-      setSplitType('equal');
-      setSplitShares({});
+    if (!isAddFormValid || isAddingExpenseRef.current) return false;
+    if (exceedsDecimal12_2Limit(amount)) {
+      setAmountEasterEggOpened(true);
+      return false;
     }
-    loadData();
+
+    isAddingExpenseRef.current = true;
+    setIsAddingExpense(true);
+    try {
+      await api.createExpense(
+        token,
+        group.id,
+        description,
+        typeof amount === 'string' ? parseFloat(amount) : amount,
+        paidBy!,
+        splitBetween,
+        expenseType,
+        expenseType === 'transfer' ? (transferTo ?? undefined) : undefined,
+        expenseDate || todayIso(),
+        expenseCurrency,
+        exchangeRate,
+        splitType,
+        (splitType !== 'equal')
+          ? splitBetween.map(id => ({ member_id: id, share: splitShares[id] ?? 0 }))
+          : undefined,
+      );
+
+      // If receipt items are queued, don't reset — handleReceiptItemSubmitted will pre-fill next item
+      if (receiptItems.length === 0 || receiptItemIndex >= receiptItems.length - 1) {
+        setDescription('');
+        setAmount('');
+        setPaidBy(null);
+        setSplitBetween(allMemberIds);
+        setExpenseType('expense');
+        setTransferTo(null);
+        setExpenseDate(todayIso());
+        setExpenseCurrency(group.currency);
+        setExchangeRate(1);
+        setSplitType('equal');
+        setSplitShares({});
+      }
+      await loadData();
+      return true;
+    } finally {
+      isAddingExpenseRef.current = false;
+      setIsAddingExpense(false);
+    }
   };
 
   // Receipt scan: create a single expense from the total
@@ -796,7 +821,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
             onCreateItems={handleReceiptItems}
           />
           <Modal opened={addEntryOpened} onClose={() => { closeAddEntry(); setReceiptItems([]); setReceiptItemIndex(0); }} title={receiptItems.length > 0 ? `${t('addEntry')} (${receiptItemIndex + 1}/${receiptItems.length})` : t('addEntry')} centered size="md">
-              <form onSubmit={(e) => { handleAddExpense(e).then(() => { if (receiptItems.length > 0) { handleReceiptItemSubmitted(); } else { closeAddEntry(); } }); }}>
+              <form onSubmit={(e) => { handleAddExpense(e).then((created) => { if (!created) return; if (receiptItems.length > 0) { handleReceiptItemSubmitted(); } else { closeAddEntry(); } }); }}>
                 <Stack gap="sm">
                   <MGroup gap={4} align="center">
                     <SegmentedControl
@@ -818,11 +843,36 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                       { label: t('income'), value: 'income' },
                     ]}
                   />
-                  <Tooltip label={t('expenseTypeHelp')} multiline w={260} withArrow styles={{ tooltip: { whiteSpace: 'pre-line' } }}>
-                    <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
-                      <Text size="xs">?</Text>
-                    </ActionIcon>
-                  </Tooltip>
+                  <Popover
+                    opened={expenseTypeHelpOpened}
+                    onChange={setExpenseTypeHelpOpened}
+                    width={260}
+                    withArrow
+                    position="bottom"
+                    shadow="md"
+                  >
+                    <Popover.Target>
+                      <ActionIcon
+                        size="xs"
+                        variant="subtle"
+                        color="gray"
+                        radius="xl"
+                        aria-label={t('expenseTypeHelp')}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setExpenseTypeHelpOpened((prev) => !prev);
+                        }}
+                      >
+                        <Text size="xs">?</Text>
+                      </ActionIcon>
+                    </Popover.Target>
+                    <Popover.Dropdown>
+                      <Text size="xs" style={{ whiteSpace: 'pre-line' }}>
+                        {t('expenseTypeHelp')}
+                      </Text>
+                    </Popover.Dropdown>
+                  </Popover>
                   </MGroup>
                   <TextInput
                     placeholder={t('description')}
@@ -909,11 +959,36 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                         <>
                           <MGroup gap={4} align="center">
                             <Text size="sm" fw={500}>{t('splitMethod')}</Text>
-                            <Tooltip label={t('splitMethodHelp')} multiline w={260} withArrow styles={{ tooltip: { whiteSpace: 'pre-line' } }}>
-                              <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
-                                <Text size="xs">?</Text>
-                              </ActionIcon>
-                            </Tooltip>
+                            <Popover
+                              opened={splitMethodHelpOpened}
+                              onChange={setSplitMethodHelpOpened}
+                              width={260}
+                              withArrow
+                              position="bottom"
+                              shadow="md"
+                            >
+                              <Popover.Target>
+                                <ActionIcon
+                                  size="xs"
+                                  variant="subtle"
+                                  color="gray"
+                                  radius="xl"
+                                  aria-label={t('splitMethodHelp')}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setSplitMethodHelpOpened((prev) => !prev);
+                                  }}
+                                >
+                                  <Text size="xs">?</Text>
+                                </ActionIcon>
+                              </Popover.Target>
+                              <Popover.Dropdown>
+                                <Text size="xs" style={{ whiteSpace: 'pre-line' }}>
+                                  {t('splitMethodHelp')}
+                                </Text>
+                              </Popover.Dropdown>
+                            </Popover>
                           </MGroup>
                           <SegmentedControl
                             fullWidth
@@ -1048,7 +1123,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                     clearable
                     maxDate={new Date()}
                   />
-                  <Button type="submit" fullWidth disabled={!isAddFormValid}>
+                  <Button type="submit" fullWidth disabled={!isAddFormValid || isAddingExpense} loading={isAddingExpense}>
                     {expenseType === 'transfer' ? t('addTransfer') : expenseType === 'income' ? t('addIncome') : t('addExpense')}
                   </Button>
                   {receiptItems.length > 0 && (
@@ -1060,6 +1135,16 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                   )}
                 </Stack>
               </form>
+          </Modal>
+
+          <Modal
+            opened={amountEasterEggOpened}
+            onClose={() => setAmountEasterEggOpened(false)}
+            centered
+            size="sm"
+            title="Too Rich"
+          >
+            <Text size="sm">{t('lowIncomeEasterEgg')}</Text>
           </Modal>
           </>
           )}

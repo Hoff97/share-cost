@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Text, Card, Badge, Collapse, Divider, Stack,
   Group as MGroup, SegmentedControl, TextInput, NumberInput, Select,
-  Checkbox, Slider, ActionIcon, Tooltip,
+  Checkbox, Slider, ActionIcon, Popover,
   Button, Modal,
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
@@ -89,6 +89,8 @@ export function ExpenseCard({
   const { t } = useTranslation();
 
   const [showConvertModal, setShowConvertModal] = useState(false);
+  const [expenseTypeHelpOpened, setExpenseTypeHelpOpened] = useState(false);
+  const [splitMethodHelpOpened, setSplitMethodHelpOpened] = useState(false);
 
   // Edit state
   const [editDescription, setEditDescription] = useState(expense.description);
@@ -244,11 +246,36 @@ export function ExpenseCard({
               { label: t('income'), value: 'income' },
             ]}
           />
-          <Tooltip label={t('expenseTypeHelp')} multiline w={260} withArrow styles={{ tooltip: { whiteSpace: 'pre-line' } }}>
-            <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
-              <Text size="xs">?</Text>
-            </ActionIcon>
-          </Tooltip>
+          <Popover
+            opened={expenseTypeHelpOpened}
+            onChange={setExpenseTypeHelpOpened}
+            width={260}
+            withArrow
+            position="bottom"
+            shadow="md"
+          >
+            <Popover.Target>
+              <ActionIcon
+                size="xs"
+                variant="subtle"
+                color="gray"
+                radius="xl"
+                aria-label={t('expenseTypeHelp')}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setExpenseTypeHelpOpened((prev) => !prev);
+                }}
+              >
+                <Text size="xs">?</Text>
+              </ActionIcon>
+            </Popover.Target>
+            <Popover.Dropdown>
+              <Text size="xs" style={{ whiteSpace: 'pre-line' }}>
+                {t('expenseTypeHelp')}
+              </Text>
+            </Popover.Dropdown>
+          </Popover>
           </MGroup>
           <TextInput
             placeholder={t('description')}
@@ -335,11 +362,36 @@ export function ExpenseCard({
                 <>
                   <MGroup gap={4} align="center">
                     <Text size="sm" fw={500}>{t('splitMethod')}</Text>
-                    <Tooltip label={t('splitMethodHelp')} multiline w={260} withArrow styles={{ tooltip: { whiteSpace: 'pre-line' } }}>
-                      <ActionIcon size="xs" variant="subtle" color="gray" radius="xl">
-                        <Text size="xs">?</Text>
-                      </ActionIcon>
-                    </Tooltip>
+                    <Popover
+                      opened={splitMethodHelpOpened}
+                      onChange={setSplitMethodHelpOpened}
+                      width={260}
+                      withArrow
+                      position="bottom"
+                      shadow="md"
+                    >
+                      <Popover.Target>
+                        <ActionIcon
+                          size="xs"
+                          variant="subtle"
+                          color="gray"
+                          radius="xl"
+                          aria-label={t('splitMethodHelp')}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setSplitMethodHelpOpened((prev) => !prev);
+                          }}
+                        >
+                          <Text size="xs">?</Text>
+                        </ActionIcon>
+                      </Popover.Target>
+                      <Popover.Dropdown>
+                        <Text size="xs" style={{ whiteSpace: 'pre-line' }}>
+                          {t('splitMethodHelp')}
+                        </Text>
+                      </Popover.Dropdown>
+                    </Popover>
                   </MGroup>
                   <SegmentedControl
                     fullWidth

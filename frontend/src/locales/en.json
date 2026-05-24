@@ -197,5 +197,6 @@
   "importGroupDesc": "Import a previously exported group backup",
   "importFile": "Select JSON file",
   "importError": "Failed to import group",
-  "importSuccess": "Group imported successfully"
+  "importSuccess": "Group imported successfully",
+  "lowIncomeEasterEgg": "Sorry, this app was only made for low-income earners"
 }

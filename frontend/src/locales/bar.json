@@ -197,5 +197,6 @@
   "importGroupDesc": "A friara exportiart Gruppen-Sicherung importiern",
   "importFile": "JSON-Datei aussuachn",
   "importError": "Fehla beim Importiern da Gruppe",
-  "importSuccess": "Gruppe erfolgraich importiert"
+  "importSuccess": "Gruppe erfolgraich importiert",
+  "lowIncomeEasterEgg": "sorry, de app is bloass fuer geringverdiener baut"
 }

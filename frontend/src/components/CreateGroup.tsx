@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Paper, Title, TextInput, Button, Stack, Pill, Group as MGroup, Select, Tabs, Text, Alert,
 } from '@mantine/core';
@@ -21,6 +21,8 @@ export function CreateGroup({ onGroupCreated, onCancel }: CreateGroupProps) {
   const [importError, setImportError] = useState<string | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string | null>('create');
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const creatingGroupRef = useRef(false);
 
   const handleAddMember = () => {
     const trimmed = memberInput.trim();
@@ -43,10 +45,17 @@ export function CreateGroup({ onGroupCreated, onCancel }: CreateGroupProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || members.length < 2) return;
+    if (!name || members.length < 2 || creatingGroupRef.current) return;
 
-    const response = await api.createGroup(name, members, currency);
-    onGroupCreated(response.group, response.token);
+    creatingGroupRef.current = true;
+    setCreatingGroup(true);
+    try {
+      const response = await api.createGroup(name, members, currency);
+      onGroupCreated(response.group, response.token);
+    } finally {
+      creatingGroupRef.current = false;
+      setCreatingGroup(false);
+    }
   };
 
   const handleImportJSON = () => {
@@ -183,7 +192,7 @@ export function CreateGroup({ onGroupCreated, onCancel }: CreateGroupProps) {
 
               <MGroup gap="sm" grow>
                 <Button variant="default" onClick={onCancel}>{t('cancel')}</Button>
-                <Button type="submit" disabled={!name || members.length < 2}>
+                <Button type="submit" disabled={!name || members.length < 2 || creatingGroup} loading={creatingGroup}>
                   {t('createGroup')}
                 </Button>
               </MGroup>

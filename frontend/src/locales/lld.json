@@ -196,5 +196,6 @@
   "importGroupDesc": "Importa ina backup di grup precedentamang esportada",
   "importFile": "Seleziona file JSON",
   "importError": "Fala durant l'importazion dal grup",
-  "importSuccess": "Grup importada bala-bala"
+  "importSuccess": "Grup importada bala-bala",
+  "lowIncomeEasterEgg": "sorry, chesta app e stada fata demanevel per chi che guadagna puech"
 }
