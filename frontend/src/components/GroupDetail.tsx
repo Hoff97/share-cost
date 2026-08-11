@@ -4,7 +4,7 @@ import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
   Group as MGroup, SegmentedControl, Checkbox, Badge, Card, Slider,
   Divider, CopyButton, Tooltip, Collapse, Tabs, Anchor, ActionIcon,
-  Modal, Switch, CloseButton, Center, useComputedColorScheme, Popover,
+  Modal, Switch, CloseButton, Center, useComputedColorScheme, Popover, Alert,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { DatePickerInput } from '@mantine/dates';
@@ -20,12 +20,16 @@ import { useSync } from '../sync';
 import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, updateLastCheckedAt, updateLatestActivity, getStoredPaymentInfo, savePaymentInfo, setShowMyExpensesOnly as setShowMyExpensesOnlyStorage } from '../storage';
 import { downloadGroupJSON, downloadGroupPDF } from '../exportImport';
 import { calculateSettlements, type Settlement } from '../settlements';
+import { findClosestMember, matchSettlement } from '../settlementMatch';
+import { notifyFinchSplitAdded, type SplitPrefillMessage } from '../finchHandoff';
 
 interface GroupDetailProps {
   group: Group;
   token: string;
   onGroupUpdated: () => void;
   onGroupDeleted?: () => void;
+  pendingPrefill?: SplitPrefillMessage | null;
+  onPrefillConsumed?: () => void;
 }
 
 // Today as YYYY-MM-DD
@@ -73,7 +77,7 @@ const exceedsDecimal12_2Limit = (value: number | string): boolean => {
   return integerDigits > 10;
 };
 
-export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: GroupDetailProps) {
+export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted, pendingPrefill, onPrefillConsumed }: GroupDetailProps) {
   const { t } = useTranslation();
   const colorScheme = useComputedColorScheme('light');
   const [activeTab, setActiveTab] = useQueryState('tab', parseAsStringLiteral(['expenses', 'balances', 'members'] as const).withDefault('expenses'));
@@ -103,6 +107,13 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const [splitShares, setSplitShares] = useState<Record<string, number>>({});
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const isAddingExpenseRef = useRef(false);
+  // Finch handoff: set once the pendingPrefill effect (below) applies a
+  // prefill, cleared either by a successful submit of that specific entry
+  // (see handleAddExpense) or by the modal closing without one - so a
+  // confirmation is only ever sent for the entry Finch actually asked for.
+  const prefillAppliedRef = useRef(false);
+  const prefillRequestIdRef = useRef<string | null>(null);
+  const [settlementMatchNote, setSettlementMatchNote] = useState<{ name: string; amount: string } | null>(null);
   const [amountEasterEggOpened, setAmountEasterEggOpened] = useState(false);
   const [expenseTypeHelpOpened, setExpenseTypeHelpOpened] = useState(false);
   const [splitMethodHelpOpened, setSplitMethodHelpOpened] = useState(false);
@@ -139,6 +150,10 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
   const [existingShareLinks, setExistingShareLinks] = useState<ShareLinkItem[]>([]);
   const [editingGroupName, setEditingGroupName] = useState(false);
   const [editGroupNameValue, setEditGroupNameValue] = useState('');
+  // Flips true once balances/settlements have loaded at least once - the
+  // Finch prefill effect below waits on this so a settlement match isn't
+  // computed against an empty balances[] on first mount (see the effect).
+  const [dataReady, setDataReady] = useState(false);
 
   const loadData = useCallback(async () => {
     const [expensesData, balancesData, permsData] = await Promise.all([
@@ -149,6 +164,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     setExpenses(expensesData);
     setBalances(balancesData);
     setPermissions(permsData);
+    setDataReady(true);
 
     if (selectedMemberId) {
       const myBalance = balancesData.find(b => b.user_id === selectedMemberId);
@@ -185,6 +201,54 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     return () => { cancelled = true; };
   }, [expenseCurrency, expenseDate, group.currency]);
 
+  // Finch handoff: apply a forwarded transaction's prefill once balances
+  // have loaded (dataReady) - a settlement match computed against an empty
+  // balances[] on first mount would never find anything. Runs exactly once
+  // (prefillAppliedRef) regardless of how many times the inputs flip, since
+  // App.tsx clears pendingPrefill right after handing it off anyway.
+  useEffect(() => {
+    if (!pendingPrefill || prefillAppliedRef.current || !dataReady) return;
+    prefillAppliedRef.current = true;
+    prefillRequestIdRef.current = pendingPrefill.requestId;
+
+    setDescription(pendingPrefill.description);
+    setAmount(Number(pendingPrefill.amount));
+    setExpenseCurrency(pendingPrefill.currency);
+    setExpenseDate(pendingPrefill.date);
+    setExpenseType(pendingPrefill.entryType);
+
+    if (pendingPrefill.entryType === 'transfer') {
+      setSplitBetween([]);
+      const match = matchSettlement(
+        calculateSettlements(balances),
+        selectedMemberId,
+        pendingPrefill.counterpartyName,
+        Number(pendingPrefill.amount),
+        pendingPrefill.isOutgoing,
+      );
+      if (match) {
+        setPaidBy(match.iOwe ? selectedMemberId : match.settlement.from);
+        setTransferTo(match.iOwe ? match.settlement.to : selectedMemberId);
+        setSettlementMatchNote({
+          name: match.iOwe ? match.settlement.toName : match.settlement.fromName,
+          amount: fmtAmt(match.settlement.amount, group.currency),
+        });
+      } else if (selectedMemberId) {
+        // No specific settlement identified, but the transaction's own sign
+        // still tells us which side of the transfer "me" is on.
+        if (pendingPrefill.isOutgoing) setPaidBy(selectedMemberId);
+        else setTransferTo(selectedMemberId);
+      }
+    } else {
+      setSplitBetween(group.members.map(m => m.id));
+      if (selectedMemberId) setPaidBy(selectedMemberId);
+    }
+
+    openAddEntry();
+    onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPrefill, dataReady]);
+
   // Validation for the add-expense form
   const addAmountNum = typeof amount === 'number' ? amount : parseFloat(amount as string) || 0;
   const isAddFormValid = (() => {
@@ -216,7 +280,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
     isAddingExpenseRef.current = true;
     setIsAddingExpense(true);
     try {
-      await api.createExpense(
+      const created = await api.createExpense(
         token,
         group.id,
         description,
@@ -233,6 +297,14 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
           ? splitBetween.map(id => ({ member_id: id, share: splitShares[id] ?? 0 }))
           : undefined,
       );
+
+      // Only the specific entry the Finch prefill produced confirms back to
+      // it - any other expense added afterward in the same session (the ref
+      // is cleared right here) must not be mistaken for it.
+      if (prefillRequestIdRef.current) {
+        notifyFinchSplitAdded({ requestId: prefillRequestIdRef.current, groupName: group.name, expenseId: created.id });
+        prefillRequestIdRef.current = null;
+      }
 
       // If receipt items are queued, don't reset — handleReceiptItemSubmitted will pre-fill next item
       if (receiptItems.length === 0 || receiptItemIndex >= receiptItems.length - 1) {
@@ -554,7 +626,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
 
   const memberOptions = group.members.map((m) => ({ value: m.id, label: m.name }));
 
-  const [addEntryOpened, { toggle: toggleAddEntry, close: closeAddEntry }] = useDisclosure(false);
+  const [addEntryOpened, { toggle: toggleAddEntry, close: closeAddEntry, open: openAddEntry }] = useDisclosure(false);
   const [receiptOpened, { toggle: toggleReceipt, close: closeReceipt }] = useDisclosure(false);
   const [receiptItems, setReceiptItems] = useState<Array<{ description: string; amount: number; date: string | null }>>([]);
   const [receiptItemIndex, setReceiptItemIndex] = useState(0);
@@ -626,23 +698,6 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
       creditorInTargetId: null, myIdInTarget: null,
       loading: false,
     });
-  };
-
-  // Find closest name match from a list of members (case-insensitive substring / prefix)
-  const findClosestMember = (name: string, members: api.Member[], excludeId?: string | null): string | null => {
-    const lower = name.toLowerCase();
-    const candidates = excludeId ? members.filter(m => m.id !== excludeId) : members;
-    // Exact match
-    const exact = candidates.find(m => m.name.toLowerCase() === lower);
-    if (exact) return exact.id;
-    // Starts with same prefix (first name match)
-    const firstName = lower.split(/\s+/)[0];
-    const prefix = candidates.find(m => m.name.toLowerCase().split(/\s+/)[0] === firstName);
-    if (prefix) return prefix.id;
-    // Contains
-    const contains = candidates.find(m => m.name.toLowerCase().includes(lower) || lower.includes(m.name.toLowerCase()));
-    if (contains) return contains.id;
-    return null;
   };
 
   const handleSelectTargetGroup = async (groupId: string) => {
@@ -820,7 +875,22 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
             onCreateSingle={handleReceiptSingle}
             onCreateItems={handleReceiptItems}
           />
-          <Modal opened={addEntryOpened} onClose={() => { closeAddEntry(); setReceiptItems([]); setReceiptItemIndex(0); }} title={receiptItems.length > 0 ? `${t('addEntry')} (${receiptItemIndex + 1}/${receiptItems.length})` : t('addEntry')} centered size="md">
+          <Modal
+            opened={addEntryOpened}
+            onClose={() => {
+              closeAddEntry();
+              setReceiptItems([]);
+              setReceiptItemIndex(0);
+              // A prefill session ends when its modal closes, whether or not
+              // it was ever submitted - an unrelated later entry (in this
+              // same group-visit) must not be mistaken for the Finch one.
+              prefillRequestIdRef.current = null;
+              setSettlementMatchNote(null);
+            }}
+            title={receiptItems.length > 0 ? `${t('addEntry')} (${receiptItemIndex + 1}/${receiptItems.length})` : t('addEntry')}
+            centered
+            size="md"
+          >
               <form onSubmit={(e) => { handleAddExpense(e).then((created) => { if (!created) return; if (receiptItems.length > 0) { handleReceiptItemSubmitted(); } else { closeAddEntry(); } }); }}>
                 <Stack gap="sm">
                   <MGroup gap={4} align="center">
@@ -874,6 +944,11 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted }: Gr
                     </Popover.Dropdown>
                   </Popover>
                   </MGroup>
+                  {settlementMatchNote && (
+                    <Alert color="blue" variant="light" py={6}>
+                      {t('finchSettlementMatch', { name: settlementMatchNote.name, amount: settlementMatchNote.amount })}
+                    </Alert>
+                  )}
                   <TextInput
                     placeholder={t('description')}
                     value={description}

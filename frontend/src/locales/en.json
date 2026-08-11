@@ -1,6 +1,8 @@
 {
   "appTitle": "💰 Share Cost",
   "tagline": "Split expenses with friends, no sign-up required",
+  "finchPrefillBanner": "Adding a {{type}} from Finch — pick a group",
+  "finchSettlementMatch": "Matches your settlement with {{name}} ({{amount}})",
   "offline": "📡 Offline",
   "syncing": "🔄 Syncing…",
   "pending_count": "⏳ {{count}} pending",

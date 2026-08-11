@@ -12,6 +12,7 @@ import type { StoredGroup } from './storage';
 import { getStoredGroups, saveGroup, removeGroup, setSelectedMember, getStoredGroup } from './storage';
 import { SyncProvider, useSync } from './sync';
 import { getPendingMutations, removeMutation, type QueuedMutation } from './offlineDb';
+import { isSplitPrefillMessage, notifyFinchReady, FINCH_ORIGIN, type SplitPrefillMessage } from './finchHandoff';
 
 // Extract token from URL hash (used for old-style share links)
 const getTokenFromUrl = (): string | null => {
@@ -264,6 +265,20 @@ function AppContent() {
   const [hintDismissed, setHintDismissed] = useState(() => localStorage.getItem('share-cost-hint-dismissed') === '1');
   const [storedGroups, setStoredGroups] = useState<StoredGroup[]>([]);
   const [urlGroupId, setUrlGroupId] = useQueryState('group', parseAsString);
+  const [pendingPrefill, setPendingPrefill] = useState<SplitPrefillMessage | null>(null);
+
+  // Finch handoff: ping the opener once mounted (no-op unless this tab was
+  // actually opened by Finch), and listen for the prefill payload it replies
+  // with. Both origin and source are checked before trusting anything.
+  useEffect(() => {
+    notifyFinchReady();
+    function handleMessage(event: MessageEvent) {
+      if (event.origin !== FINCH_ORIGIN || event.source !== window.opener) return;
+      if (isSplitPrefillMessage(event.data)) setPendingPrefill(event.data);
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   useEffect(() => {
     if (!initialSyncDone) return;
@@ -471,6 +486,8 @@ function AppContent() {
           token={token}
           onGroupUpdated={refreshGroup}
           onGroupDeleted={handleGroupDeleted}
+          pendingPrefill={pendingPrefill}
+          onPrefillConsumed={() => setPendingPrefill(null)}
         />
       </Container>
     );
@@ -486,6 +503,11 @@ function AppContent() {
         </MGroup>
       </MGroup>
       <InstallBanner />
+      {pendingPrefill && (
+        <Alert color="blue" variant="light" mb="md">
+          {t('finchPrefillBanner', { type: t(pendingPrefill.entryType) })}
+        </Alert>
+      )}
       {showCreate ? (
         <CreateGroup
           onGroupCreated={handleGroupCreated}
