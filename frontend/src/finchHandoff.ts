@@ -36,10 +36,42 @@ export interface SplitAddedMessage {
   expenseId: string;
 }
 
+// The account-level "connect" flow (FinchConnect.tsx) - a separate popup
+// purpose from the split-prefill one above, but the same ready/reply
+// handshake shape. Finch never learns any group's long-lived bearer token
+// here, only a one-time read-only share code per group (see
+// FinchConnect.tsx's generateShareLink call) - Finch's backend redeems it
+// server-to-server.
+export interface ConnectRequestMessage {
+  source: "finch";
+  type: "finch:connect-request";
+}
+
+export interface ShareCostConnectedGroup {
+  id: string;
+  name: string;
+  currency: string;
+  memberId: string;
+  memberName: string;
+  shareCode: string;
+}
+
+export interface ShareCostConnectedMessage {
+  source: "share-cost";
+  type: "share-cost:connected";
+  groups: ShareCostConnectedGroup[];
+}
+
 export function isSplitPrefillMessage(data: unknown): data is SplitPrefillMessage {
   if (!data || typeof data !== "object") return false;
   const d = data as Record<string, unknown>;
   return d.source === "finch" && d.type === "finch:split-prefill" && typeof d.requestId === "string";
+}
+
+export function isConnectRequestMessage(data: unknown): data is ConnectRequestMessage {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  return d.source === "finch" && d.type === "finch:connect-request";
 }
 
 /** No-op if this tab wasn't actually opened by Finch (window.opener unset) -
@@ -53,5 +85,11 @@ export function notifyFinchReady(): void {
 export function notifyFinchSplitAdded(message: Omit<SplitAddedMessage, "source" | "type">): void {
   if (!window.opener) return;
   const full: SplitAddedMessage = { source: "share-cost", type: "share-cost:split-added", ...message };
+  window.opener.postMessage(full, FINCH_ORIGIN);
+}
+
+export function notifyFinchConnected(groups: ShareCostConnectedGroup[]): void {
+  if (!window.opener) return;
+  const full: ShareCostConnectedMessage = { source: "share-cost", type: "share-cost:connected", groups };
   window.opener.postMessage(full, FINCH_ORIGIN);
 }

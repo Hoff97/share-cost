@@ -12,7 +12,14 @@ import type { StoredGroup } from './storage';
 import { getStoredGroups, saveGroup, removeGroup, setSelectedMember, getStoredGroup } from './storage';
 import { SyncProvider, useSync } from './sync';
 import { getPendingMutations, removeMutation, type QueuedMutation } from './offlineDb';
-import { isSplitPrefillMessage, notifyFinchReady, FINCH_ORIGIN, type SplitPrefillMessage } from './finchHandoff';
+import {
+  isSplitPrefillMessage,
+  isConnectRequestMessage,
+  notifyFinchReady,
+  FINCH_ORIGIN,
+  type SplitPrefillMessage,
+} from './finchHandoff';
+import { FinchConnect } from './components/FinchConnect';
 
 // Extract token from URL hash (used for old-style share links)
 const getTokenFromUrl = (): string | null => {
@@ -266,15 +273,19 @@ function AppContent() {
   const [storedGroups, setStoredGroups] = useState<StoredGroup[]>([]);
   const [urlGroupId, setUrlGroupId] = useQueryState('group', parseAsString);
   const [pendingPrefill, setPendingPrefill] = useState<SplitPrefillMessage | null>(null);
+  const [connectRequested, setConnectRequested] = useState(false);
 
   // Finch handoff: ping the opener once mounted (no-op unless this tab was
-  // actually opened by Finch), and listen for the prefill payload it replies
-  // with. Both origin and source are checked before trusting anything.
+  // actually opened by Finch), and listen for whichever it replies with -
+  // either a split-prefill (add-entry flow) or a connect-request (account
+  // connection flow, see FinchConnect.tsx). Both origin and source are
+  // checked before trusting anything.
   useEffect(() => {
     notifyFinchReady();
     function handleMessage(event: MessageEvent) {
       if (event.origin !== FINCH_ORIGIN || event.source !== window.opener) return;
       if (isSplitPrefillMessage(event.data)) setPendingPrefill(event.data);
+      else if (isConnectRequestMessage(event.data)) setConnectRequested(true);
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
@@ -508,7 +519,9 @@ function AppContent() {
           {t('finchPrefillBanner')}
         </Alert>
       )}
-      {showCreate ? (
+      {connectRequested ? (
+        <FinchConnect />
+      ) : showCreate ? (
         <CreateGroup
           onGroupCreated={handleGroupCreated}
           onCancel={() => setShowCreate(false)}
