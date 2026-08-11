@@ -6,15 +6,15 @@
 // discovered; every inbound message must be validated against both
 // event.origin and event.source before being trusted - see App.tsx.
 
-export const FINCH_ORIGIN = "https://finances.share-cost.site";
-
-export type ShareCostEntryType = "expense" | "transfer" | "income";
+// import.meta.env.DEV lets local dev (`npm run dev` on both apps) talk to
+// each other over plain localhost ports without touching the hardcoded
+// production origins the deployed apps actually validate against.
+export const FINCH_ORIGIN = import.meta.env.DEV ? "http://localhost:5173" : "https://finances.share-cost.site";
 
 export interface SplitPrefillMessage {
   source: "finch";
   type: "finch:split-prefill";
   requestId: string;
-  entryType: ShareCostEntryType;
   amount: string;
   currency: string;
   description: string;
@@ -22,9 +22,9 @@ export interface SplitPrefillMessage {
   counterpartyName: string | null;
   // Money-left-the-account vs money-came-in on Finch's side - amount itself
   // is always unsigned (this app's own form encodes direction via
-  // paidBy/transferTo, not sign), but the debt-settlement matcher needs this
-  // to tell "I owe them" settlements apart from "they owe me" ones between
-  // the same two people for a similar amount.
+  // paidBy/transferTo, not sign). Decides Expense vs Income when no group
+  // member name-matches counterpartyName, and which side of a Transfer "me"
+  // is on when one does - see GroupDetail's prefill effect.
   isOutgoing: boolean;
 }
 

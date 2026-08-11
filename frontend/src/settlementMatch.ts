@@ -1,11 +1,57 @@
 import type { Member } from './offlineApi';
 import type { Settlement } from './settlements';
 
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = new Array(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = temp;
+    }
+  }
+  return dp[n];
+}
+
+function tokenize(name: string): string[] {
+  return name.toLowerCase().trim().split(/\s+/).filter(Boolean);
+}
+
+// Short tokens ("Al", "Jo") tolerate at most a 1-character slip; longer ones
+// ("Mustermann") tolerate 2 - loose enough for a typo, tight enough that
+// e.g. "Max" won't accidentally match "Marc".
+function tokenDistanceThreshold(tokenLength: number): number {
+  return tokenLength <= 4 ? 1 : 2;
+}
+
+/** Word-order- and typo-tolerant: "Max Mustermann" matches "Mustermann Max"
+ * (reordered) and "Max Mustermann" also loosely matches "Max Mustermann" with
+ * a typo. Only every token of the SHORTER name needs a close match among the
+ * other's tokens, so a middle name/initial on one side doesn't block a
+ * match - e.g. "Max A. Mustermann" still matches "Max Mustermann". */
+function tokensLikelyMatch(a: string, b: string): boolean {
+  const tokensA = tokenize(a);
+  const tokensB = tokenize(b);
+  if (tokensA.length === 0 || tokensB.length === 0) return false;
+  const [shorter, longer] = tokensA.length <= tokensB.length ? [tokensA, tokensB] : [tokensB, tokensA];
+  return shorter.every((tok) =>
+    longer.some((other) => tok === other || levenshteinDistance(tok, other) <= tokenDistanceThreshold(Math.min(tok.length, other.length))),
+  );
+}
+
 /** Case-insensitive name match: exact, then same first name, then substring
- * either direction - used to find the best-matching member for a free-text
- * name across a whole member list. Promoted out of GroupDetail's own
- * cross-group-transfer flow (behavior unchanged) so the debt-settlement
- * matcher below can reuse it. */
+ * either direction, then a word-order/typo-tolerant fuzzy match - used to
+ * find the best-matching member for a free-text name across a whole member
+ * list. The first three tiers were promoted out of GroupDetail's own
+ * cross-group-transfer flow (behavior unchanged there); the fuzzy tier is
+ * new and also backs the Finch-forwarded-transfer detection below. */
 export function findClosestMember(name: string, members: Member[], excludeId?: string | null): string | null {
   const lower = name.toLowerCase();
   const candidates = excludeId ? members.filter((m) => m.id !== excludeId) : members;
@@ -16,20 +62,9 @@ export function findClosestMember(name: string, members: Member[], excludeId?: s
   if (prefix) return prefix.id;
   const contains = candidates.find((m) => m.name.toLowerCase().includes(lower) || lower.includes(m.name.toLowerCase()));
   if (contains) return contains.id;
+  const fuzzy = candidates.find((m) => tokensLikelyMatch(m.name, name));
+  if (fuzzy) return fuzzy.id;
   return null;
-}
-
-/** Same exact -> first-name -> substring cascade as findClosestMember, just
- * for a specific pair rather than picking the best across a list - used to
- * check "is THIS settlement's other party the one Finch told us about",
- * not "which member overall is closest". */
-function namesLikelyMatch(a: string, b: string): boolean {
-  const la = a.toLowerCase().trim();
-  const lb = b.toLowerCase().trim();
-  if (!la || !lb) return false;
-  if (la === lb) return true;
-  if (la.split(/\s+/)[0] === lb.split(/\s+/)[0]) return true;
-  return la.includes(lb) || lb.includes(la);
 }
 
 // Amounts rarely need to match to the cent - a person settling a debt by
@@ -46,43 +81,25 @@ function amountsClose(a: number, b: number): boolean {
   return Math.abs(a - b) <= tolerance;
 }
 
-export interface SettlementMatch {
-  settlement: Settlement;
-  /** true when `selectedMemberId` ("me" in this group) is the debtor - a
-   * real transfer in that direction should show me as paidBy, them as
-   * transferTo; false is the reverse. */
-  iOwe: boolean;
-}
-
-/** Tries to identify which of the group's outstanding settlements a
- * forwarded Finch transfer corresponds to. Never guesses: returns null
- * unless exactly one settlement survives every filter (involves me, amount
- * close, direction consistent with the transaction's own sign, other
- * party's name plausibly matches what Finch sent) - ambiguity falls back to
- * the existing manual flow rather than silently picking one. */
-export function matchSettlement(
+/** Purely a confirmation aid, not a decision-maker - by the time this is
+ * called, WHO the transfer is with has already been decided by a member
+ * name match (see GroupDetail's prefill effect). This just checks whether
+ * the amount happens to line up with an outstanding settlement between
+ * those two specific people, so the UI can say "matches your settlement"
+ * rather than silently prefilling with no explanation. Returns null (no
+ * note, not an error) when the transfer doesn't correspond to an existing
+ * debt - e.g. it's establishing a brand new one. */
+export function findMatchingSettlement(
   settlements: Settlement[],
-  selectedMemberId: string | null,
-  counterpartyName: string | null,
+  memberAId: string,
+  memberBId: string,
   amount: number,
-  isOutgoing: boolean,
-): SettlementMatch | null {
-  if (!selectedMemberId || !counterpartyName?.trim()) return null;
-
-  const candidates = settlements.filter((s) => {
-    const involvesMe = s.from === selectedMemberId || s.to === selectedMemberId;
-    if (!involvesMe) return false;
-    const iOwe = s.from === selectedMemberId;
-    // Outgoing money can only be settling a debt I owe; incoming only one
-    // owed to me - this alone resolves most ambiguity before names even
-    // come into it.
-    if (iOwe !== isOutgoing) return false;
-    if (!amountsClose(amount, s.amount)) return false;
-    const otherName = iOwe ? s.toName : s.fromName;
-    return namesLikelyMatch(otherName, counterpartyName);
-  });
-
-  if (candidates.length !== 1) return null;
-  const settlement = candidates[0];
-  return { settlement, iOwe: settlement.from === selectedMemberId };
+): Settlement | null {
+  return (
+    settlements.find(
+      (s) =>
+        ((s.from === memberAId && s.to === memberBId) || (s.from === memberBId && s.to === memberAId)) &&
+        amountsClose(amount, s.amount),
+    ) ?? null
+  );
 }

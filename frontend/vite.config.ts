@@ -45,6 +45,11 @@ export default defineConfig({
     }),
   ],
   server: {
+    // 5174, not vite's default 5173 - finances.share-cost.site's own dev
+    // server already uses 5173, and useShareCostHandoff's dev-mode
+    // SHARE_COST_ORIGIN is hardcoded to this port so the two apps can talk
+    // to each other locally (see finchHandoff.ts/useShareCostHandoff.ts).
+    port: 5174,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

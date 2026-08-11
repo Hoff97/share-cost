@@ -20,7 +20,7 @@ import { useSync } from '../sync';
 import { getStoredGroup, getStoredGroups, setSelectedMember, updateCachedBalance, updateLastCheckedAt, updateLatestActivity, getStoredPaymentInfo, savePaymentInfo, setShowMyExpensesOnly as setShowMyExpensesOnlyStorage } from '../storage';
 import { downloadGroupJSON, downloadGroupPDF } from '../exportImport';
 import { calculateSettlements, type Settlement } from '../settlements';
-import { findClosestMember, matchSettlement } from '../settlementMatch';
+import { findClosestMember, findMatchingSettlement } from '../settlementMatch';
 import { notifyFinchSplitAdded, type SplitPrefillMessage } from '../finchHandoff';
 
 interface GroupDetailProps {
@@ -113,7 +113,12 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted, pend
   // confirmation is only ever sent for the entry Finch actually asked for.
   const prefillAppliedRef = useRef(false);
   const prefillRequestIdRef = useRef<string | null>(null);
-  const [settlementMatchNote, setSettlementMatchNote] = useState<{ name: string; amount: string } | null>(null);
+  // amount is null when a transfer's OTHER PARTY was matched by name but the
+  // amount doesn't correspond to any existing outstanding settlement (e.g.
+  // this is establishing a brand new debt, not paying off an old one) - the
+  // note then reads as a plain "detected as a transfer" rather than
+  // claiming a settlement match that isn't there.
+  const [settlementMatchNote, setSettlementMatchNote] = useState<{ name: string; amount: string | null } | null>(null);
   const [amountEasterEggOpened, setAmountEasterEggOpened] = useState(false);
   const [expenseTypeHelpOpened, setExpenseTypeHelpOpened] = useState(false);
   const [splitMethodHelpOpened, setSplitMethodHelpOpened] = useState(false);
@@ -202,10 +207,16 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted, pend
   }, [expenseCurrency, expenseDate, group.currency]);
 
   // Finch handoff: apply a forwarded transaction's prefill once balances
-  // have loaded (dataReady) - a settlement match computed against an empty
-  // balances[] on first mount would never find anything. Runs exactly once
-  // (prefillAppliedRef) regardless of how many times the inputs flip, since
-  // App.tsx clears pendingPrefill right after handing it off anyway.
+  // have loaded (dataReady) - a settlement-note lookup computed against an
+  // empty balances[] on first mount would never find anything. Runs exactly
+  // once (prefillAppliedRef) regardless of how many times the inputs flip,
+  // since App.tsx clears pendingPrefill right after handing it off anyway.
+  //
+  // Finch itself never decides expense/transfer/income - that decision
+  // lives entirely here: a transfer only wins over the sign-implied
+  // expense/income when the transaction's counterparty name matches one of
+  // THIS group's members (fuzzily - see findClosestMember), since only then
+  // do we actually know who the other party is.
   useEffect(() => {
     if (!pendingPrefill || prefillAppliedRef.current || !dataReady) return;
     prefillAppliedRef.current = true;
@@ -215,31 +226,44 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted, pend
     setAmount(Number(pendingPrefill.amount));
     setExpenseCurrency(pendingPrefill.currency);
     setExpenseDate(pendingPrefill.date);
-    setExpenseType(pendingPrefill.entryType);
 
-    if (pendingPrefill.entryType === 'transfer') {
+    const matchedMemberId = pendingPrefill.counterpartyName?.trim()
+      ? findClosestMember(pendingPrefill.counterpartyName, group.members, selectedMemberId)
+      : null;
+
+    if (matchedMemberId) {
+      setExpenseType('transfer');
       setSplitBetween([]);
-      const match = matchSettlement(
-        calculateSettlements(balances),
-        selectedMemberId,
-        pendingPrefill.counterpartyName,
-        Number(pendingPrefill.amount),
-        pendingPrefill.isOutgoing,
-      );
-      if (match) {
-        setPaidBy(match.iOwe ? selectedMemberId : match.settlement.from);
-        setTransferTo(match.iOwe ? match.settlement.to : selectedMemberId);
-        setSettlementMatchNote({
-          name: match.iOwe ? match.settlement.toName : match.settlement.fromName,
-          amount: fmtAmt(match.settlement.amount, group.currency),
-        });
-      } else if (selectedMemberId) {
-        // No specific settlement identified, but the transaction's own sign
-        // still tells us which side of the transfer "me" is on.
-        if (pendingPrefill.isOutgoing) setPaidBy(selectedMemberId);
-        else setTransferTo(selectedMemberId);
+      const matchedMember = group.members.find(m => m.id === matchedMemberId);
+
+      if (selectedMemberId) {
+        if (pendingPrefill.isOutgoing) {
+          setPaidBy(selectedMemberId);
+          setTransferTo(matchedMemberId);
+        } else {
+          setPaidBy(matchedMemberId);
+          setTransferTo(selectedMemberId);
+        }
+        const settlement = findMatchingSettlement(
+          calculateSettlements(balances),
+          selectedMemberId,
+          matchedMemberId,
+          Number(pendingPrefill.amount),
+        );
+        if (matchedMember) {
+          setSettlementMatchNote({
+            name: matchedMember.name,
+            amount: settlement ? fmtAmt(settlement.amount, group.currency) : null,
+          });
+        }
+      } else {
+        // Don't know which side "me" is on yet - fill in the side we ARE
+        // confident about and leave the other for the user to pick.
+        if (pendingPrefill.isOutgoing) setTransferTo(matchedMemberId);
+        else setPaidBy(matchedMemberId);
       }
     } else {
+      setExpenseType(pendingPrefill.isOutgoing ? 'expense' : 'income');
       setSplitBetween(group.members.map(m => m.id));
       if (selectedMemberId) setPaidBy(selectedMemberId);
     }
@@ -946,7 +970,9 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted, pend
                   </MGroup>
                   {settlementMatchNote && (
                     <Alert color="blue" variant="light" py={6}>
-                      {t('finchSettlementMatch', { name: settlementMatchNote.name, amount: settlementMatchNote.amount })}
+                      {settlementMatchNote.amount != null
+                        ? t('finchSettlementMatch', { name: settlementMatchNote.name, amount: settlementMatchNote.amount })
+                        : t('finchTransferDetected', { name: settlementMatchNote.name })}
                     </Alert>
                   )}
                   <TextInput

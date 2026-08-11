@@ -505,7 +505,7 @@ function AppContent() {
       <InstallBanner />
       {pendingPrefill && (
         <Alert color="blue" variant="light" mb="md">
-          {t('finchPrefillBanner', { type: t(pendingPrefill.entryType) })}
+          {t('finchPrefillBanner')}
         </Alert>
       )}
       {showCreate ? (
