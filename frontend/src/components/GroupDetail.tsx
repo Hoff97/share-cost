@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useQueryState, parseAsStringLiteral } from 'nuqs';
+import { useQueryState, parseAsString, parseAsStringLiteral } from 'nuqs';
 import {
   Paper, Title, Text, Button, TextInput, NumberInput, Select, Stack,
   Group as MGroup, SegmentedControl, Checkbox, Badge, Card, Slider,
@@ -81,6 +81,13 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted, pend
   const { t } = useTranslation();
   const colorScheme = useComputedColorScheme('light');
   const [activeTab, setActiveTab] = useQueryState('tab', parseAsStringLiteral(['expenses', 'balances', 'members'] as const).withDefault('expenses'));
+  // Deep link from Finch's "Open in share-cost" (transaction detail page) -
+  // scroll to and expand a specific expense once loaded, see the effect
+  // near the Finch-prefill one below. Cleared once handled either way, so a
+  // later reload of the same URL doesn't keep re-scrolling.
+  const [urlExpenseId, setUrlExpenseId] = useQueryState('expense', parseAsString);
+  const [expenseNotFoundNotice, setExpenseNotFoundNotice] = useState(false);
+  const expenseUrlHandledRef = useRef(false);
 
   // Reset tab to expenses when opening a group
   useEffect(() => {
@@ -273,6 +280,30 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted, pend
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPrefill, dataReady]);
 
+  // Finch's "Open in share-cost" deep link (?expense=<id>) - same dataReady
+  // gating as the prefill effect above (expenses isn't populated yet on
+  // first mount). Finch never validates the link before offering it (see
+  // its own TransactionDetailPage comment), so the expense id may not exist
+  // any more - a plain "not found" notice beats a silent no-op.
+  useEffect(() => {
+    if (!urlExpenseId || expenseUrlHandledRef.current || !dataReady) return;
+    expenseUrlHandledRef.current = true;
+
+    const target = expenses.find(e => e.id === urlExpenseId);
+    if (target) {
+      setActiveTab('expenses');
+      setExpandedExpenses(prev => new Set(prev).add(urlExpenseId));
+      // Wait a tick for the tab switch/expand to render before scrolling.
+      setTimeout(() => {
+        document.getElementById(`expense-${urlExpenseId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
+    } else {
+      setExpenseNotFoundNotice(true);
+    }
+    setUrlExpenseId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlExpenseId, dataReady, expenses]);
+
   // Validation for the add-expense form
   const addAmountNum = typeof amount === 'number' ? amount : parseFloat(amount as string) || 0;
   const isAddFormValid = (() => {
@@ -326,7 +357,7 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted, pend
       // it - any other expense added afterward in the same session (the ref
       // is cleared right here) must not be mistaken for it.
       if (prefillRequestIdRef.current) {
-        notifyFinchSplitAdded({ requestId: prefillRequestIdRef.current, groupName: group.name, expenseId: created.id });
+        notifyFinchSplitAdded({ requestId: prefillRequestIdRef.current, groupName: group.name, groupId: group.id, expenseId: created.id });
         prefillRequestIdRef.current = null;
       }
 
@@ -1248,6 +1279,18 @@ export function GroupDetail({ group, token, onGroupUpdated, onGroupDeleted, pend
             <Text size="sm">{t('lowIncomeEasterEgg')}</Text>
           </Modal>
           </>
+          )}
+
+          {expenseNotFoundNotice && (
+            <Alert
+              color="yellow"
+              variant="light"
+              withCloseButton
+              onClose={() => setExpenseNotFoundNotice(false)}
+              mb="xs"
+            >
+              {t('expenseNotFound')}
+            </Alert>
           )}
 
           {selectedMemberId && (

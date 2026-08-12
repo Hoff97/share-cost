@@ -33,6 +33,7 @@ export interface SplitAddedMessage {
   type: "share-cost:split-added";
   requestId: string;
   groupName: string;
+  groupId: string;
   expenseId: string;
 }
 

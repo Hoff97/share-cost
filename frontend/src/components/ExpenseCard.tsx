@@ -192,6 +192,7 @@ export function ExpenseCard({
 
   return (
     <Card
+      id={`expense-${expense.id}`}
       padding="sm"
       radius="md"
       withBorder
