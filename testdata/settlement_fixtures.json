@@ -1,0 +1,75 @@
+[
+  {
+    "name": "two_person_debt",
+    "balances": [
+      { "user_id": "11111111-1111-1111-1111-111111111111", "user_name": "Alice", "balance": -30.0 },
+      { "user_id": "22222222-2222-2222-2222-222222222222", "user_name": "Bob", "balance": 30.0 }
+    ],
+    "expected": [
+      {
+        "from": "11111111-1111-1111-1111-111111111111",
+        "from_name": "Alice",
+        "to": "22222222-2222-2222-2222-222222222222",
+        "to_name": "Bob",
+        "amount": 30.0
+      }
+    ]
+  },
+  {
+    "name": "three_person_single_creditor",
+    "balances": [
+      { "user_id": "11111111-1111-1111-1111-111111111111", "user_name": "Alice", "balance": -10.0 },
+      { "user_id": "22222222-2222-2222-2222-222222222222", "user_name": "Bob", "balance": -20.0 },
+      { "user_id": "33333333-3333-3333-3333-333333333333", "user_name": "Carol", "balance": 30.0 }
+    ],
+    "expected": [
+      {
+        "from": "11111111-1111-1111-1111-111111111111",
+        "from_name": "Alice",
+        "to": "33333333-3333-3333-3333-333333333333",
+        "to_name": "Carol",
+        "amount": 10.0
+      },
+      {
+        "from": "22222222-2222-2222-2222-222222222222",
+        "from_name": "Bob",
+        "to": "33333333-3333-3333-3333-333333333333",
+        "to_name": "Carol",
+        "amount": 20.0
+      }
+    ]
+  },
+  {
+    "name": "already_settled",
+    "balances": [
+      { "user_id": "11111111-1111-1111-1111-111111111111", "user_name": "Alice", "balance": 0.0 },
+      { "user_id": "22222222-2222-2222-2222-222222222222", "user_name": "Bob", "balance": 0.0 }
+    ],
+    "expected": []
+  },
+  {
+    "name": "four_person_two_independent_pairs",
+    "balances": [
+      { "user_id": "11111111-1111-1111-1111-111111111111", "user_name": "Alice", "balance": -15.0 },
+      { "user_id": "22222222-2222-2222-2222-222222222222", "user_name": "Bob", "balance": 15.0 },
+      { "user_id": "33333333-3333-3333-3333-333333333333", "user_name": "Carol", "balance": -25.0 },
+      { "user_id": "44444444-4444-4444-4444-444444444444", "user_name": "Dave", "balance": 25.0 }
+    ],
+    "expected": [
+      {
+        "from": "11111111-1111-1111-1111-111111111111",
+        "from_name": "Alice",
+        "to": "22222222-2222-2222-2222-222222222222",
+        "to_name": "Bob",
+        "amount": 15.0
+      },
+      {
+        "from": "33333333-3333-3333-3333-333333333333",
+        "from_name": "Carol",
+        "to": "44444444-4444-4444-4444-444444444444",
+        "to_name": "Dave",
+        "amount": 25.0
+      }
+    ]
+  }
+]

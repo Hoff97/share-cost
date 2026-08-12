@@ -649,13 +649,28 @@ async fn delete_expense(auth: GroupAuth, expense_id: &str) -> Result<Status, Sta
 // Get balances - requires valid JWT
 #[get("/groups/current/balances")]
 async fn get_balances(auth: GroupAuth) -> Result<Json<Vec<Balance>>, Status> {
+    Ok(Json(compute_balances(auth.group_id).await?))
+}
+
+// Get settlements (minimum transfers to zero out every member's balance) -
+// requires valid JWT, same access level as balances (read-only, no
+// permission gate). Shares its balance computation with get_balances so
+// the two endpoints can never disagree on each member's starting position -
+// only settlements.rs's own calculate_settlements differs between them.
+#[get("/groups/current/settlements")]
+async fn get_settlements(auth: GroupAuth) -> Result<Json<Vec<crate::settlements::Settlement>>, Status> {
+    let balances = compute_balances(auth.group_id).await?;
+    Ok(Json(crate::settlements::calculate_settlements(&balances)))
+}
+
+async fn compute_balances(group_id: Uuid) -> Result<Vec<Balance>, Status> {
     let pool = db::get_pool();
 
     // Get all members
     let member_rows: Vec<MemberRow> = sqlx::query_as(
         "SELECT id, group_id, name, paypal_email, iban, created_at FROM members WHERE group_id = $1"
     )
-    .bind(auth.group_id)
+    .bind(group_id)
     .fetch_all(pool)
     .await
     .map_err(|e| {
@@ -668,7 +683,7 @@ async fn get_balances(auth: GroupAuth) -> Result<Json<Vec<Balance>>, Status> {
         "SELECT id, group_id, description, amount, paid_by, expense_type, transfer_to, currency, exchange_rate, expense_date, created_at, split_type 
          FROM expenses WHERE group_id = $1"
     )
-    .bind(auth.group_id)
+    .bind(group_id)
     .fetch_all(pool)
     .await
     .map_err(|e| {
@@ -822,7 +837,7 @@ async fn get_balances(auth: GroupAuth) -> Result<Json<Vec<Balance>>, Status> {
         }
     }
 
-    Ok(Json(balances))
+    Ok(balances)
 }
 
 // Get current token's permissions
@@ -1422,6 +1437,7 @@ pub fn get_routes() -> Vec<Route> {
         update_expense,
         delete_expense,
         get_balances,
+        get_settlements,
         generate_share_link,
         list_share_links,
         delete_share_link,

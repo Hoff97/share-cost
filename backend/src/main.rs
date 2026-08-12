@@ -5,6 +5,7 @@ mod auth;
 mod db;
 mod models;
 mod routes;
+mod settlements;
 
 use rocket::fairing::AdHoc;
 use rocket::fs::NamedFile;
